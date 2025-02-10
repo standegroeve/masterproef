@@ -18,6 +18,7 @@
     <modules>
         <module>definitions</module>
         <module>utils</module>
+        <module>security</module>
     </modules>
 
     <build>
