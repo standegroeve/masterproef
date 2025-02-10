@@ -1,0 +1,86 @@
+mp:
+  messaging:
+    outgoing:
+      change_requests_publish:
+        connector: smallrye-kafka
+        topic: change.requests
+        merge: true
+        waitForWriteCompletion: false
+      outbox_publish:
+        connector: smallrye-kafka
+        topic: outbox
+        merge: true
+        waitForWriteCompletion: false
+      slice_outbox_publish:
+        connector: smallrye-kafka
+        merge: true
+        waitForWriteCompletion: false
+      storage_mutations_publish:
+        connector: smallrye-kafka
+        topic: storage.mutations
+        merge: true
+        waitForWriteCompletion: false
+      slice_events_publish:
+        connector: smallrye-kafka
+        topic: slice.events
+        merge: true
+        waitForWriteCompletion: false
+      pod_events_publish:
+        connector: smallrye-kafka
+        topic: pod.events
+        merge: true
+        waitForWriteCompletion: false
+    incoming:
+      change_requests_subscribe:
+        connector: smallrye-kafka
+        topic: change.requests
+        broadcast: true
+        auto:
+          offset:
+            reset: earliest
+      outbox_subscribe:
+        connector: smallrye-kafka
+        topic: outbox
+        broadcast: true
+        auto:
+          offset:
+            reset: earliest
+      storage_mutations_subscribe:
+        connector: smallrye-kafka
+        topic: storage.mutations
+        broadcast: true
+        auto:
+          offset:
+            reset: earliest
+      slice_events_subscribe:
+        connector: smallrye-kafka
+        topic: slice.events
+        broadcast: true
+        auto:
+          offset:
+            reset: earliest
+        pod_events_subscribe:
+            connector: smallrye-kafka
+            topic: pod.events
+            broadcast: true
+            auto:
+                offset:
+                reset: earliest
+
+"%dev":
+   quarkus:
+     log:
+       level: INFO
+       category:
+         "kvasir":
+           level: DEBUG
+           min-level: DEBUG
+
+"%test":
+  quarkus:
+    log:
+      level: INFO
+      category:
+        "kvasir":
+          level: DEBUG
+          min-level: DEBUG
