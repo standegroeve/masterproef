@@ -17,28 +17,54 @@ import kotlin.experimental.and
 import kotlin.experimental.or
 
 
+/*
+*
+*
+*               CONSTANTS
+*
+*
+* */
+
+
+public val B = convert_mont(BigInteger("9"));
+public val q = BigInteger("27742317777372353535851937790883648493").add(BigInteger.ONE.shiftLeft(252))
+public val b = 256
+public val p = BigInteger("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed")
+public val d: BigInteger = BigInteger("-121665").divide(BigInteger("121666"))
+
+/*
+*
+*
+* */
+
+
+
 data class EdwardsPoint(val y: BigInteger, val s: BigInteger) {
     fun add(other: EdwardsPoint): EdwardsPoint {
         return EdwardsPoint(y+other.y, s+other.s);
     }
 
-    fun scalarMultiplication(k : BigInteger): EdwardsPoint {
+    fun double(): EdwardsPoint {
+        return EdwardsPoint(y.multiply(BigInteger.TWO),s.multiply(BigInteger.TWO))
+    }
+
+    fun scalarMultiplication(k : ByteArray): EdwardsPoint {
         var R0: EdwardsPoint = EdwardsPoint(BigInteger.ZERO,BigInteger.ZERO);
         var R1: EdwardsPoint = this;
 
-        val binaryK: String = k.toString(2);
-        for (bitChar: Char in binaryK) {
-            val bit: Int = bitChar.toString().toInt();
+        for (byte: Byte in k) {
+            for (bitIndex in 7 downTo 0) {
+                val bit = (byte.toInt() shr bitIndex) and 1
 
-            // Double both points
-            R0 = EdwardsPoint(R0.y.multiply(BigInteger.TWO), R0.s.multiply(BigInteger.TWO));
-            R1 = EdwardsPoint(R1.y.multiply(BigInteger.TWO), R1.s.multiply(BigInteger.TWO));
+                // Double both points
+                R0 = R0.double()
+                R1 = R1.double()
 
-            if (bit == 1) {
-                R0 = R0.add(R1);
-            }
-            else {
-                R1 = R0.add(R1);
+                if (bit == 1) {
+                    R0 = R0.add(R1)
+                } else {
+                    R1 = R0.add(R1)
+                }
             }
         }
         return R0;
@@ -54,11 +80,13 @@ data class EdwardsPoint(val y: BigInteger, val s: BigInteger) {
 
         return byteArray
     }
+
+    fun onCurve(): Boolean {
+        val leftSide = y.multiply(y) + s.multiply(s)
+        val rightSide = BigInteger.ONE + d.multiply(y).multiply(y).multiply(s).multiply(s)
+        return leftSide == rightSide
+    }
 }
-
-
-private val B = convert_mont(BigInteger("9"));
-private val q = BigInteger("27742317777372353535851937790883648493").add(BigInteger.ONE.shiftLeft(252))
 
 fun convert_mont(u: BigInteger): EdwardsPoint {
     // mask u to the order of p which is 255 bits
@@ -71,7 +99,6 @@ fun convert_mont(u: BigInteger): EdwardsPoint {
 
 fun u_to_y(u: BigInteger): BigInteger {
 
-    val p = BigInteger("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed")
     // Calculate mod inverse for division
     val denominatorInv = (u.add(BigInteger.ONE)).modInverse(p)
 
@@ -79,23 +106,24 @@ fun u_to_y(u: BigInteger): BigInteger {
     return u.minus(BigInteger.ONE).multiply(denominatorInv).mod(p);
 }
 
-fun calculate_key_pair(k : X25519PrivateKeyParameters) : Pair<Ed25519PrivateKeyParameters, Ed25519PublicKeyParameters> {
-    val scalar = BigInteger(1,k.encoded)
-    val E: EdwardsPoint = B.scalarMultiplication(scalar)
+fun calculate_key_pair(k : X25519PrivateKeyParameters) : Pair<Ed25519PublicKeyParameters, Ed25519PrivateKeyParameters> {
+    val E: EdwardsPoint = B.scalarMultiplication(k.encoded)
 
     val A = EdwardsPoint(E.y, E.s)
     var a: BigInteger
+
+    val scalar = BigInteger(1,k.encoded)
     if (E.s.equals(1)) {
-        a = scalar.negate().mod(q)
+        a =  scalar.negate().mod(q)
     }
     else {
         a = scalar.mod(q)
     }
 
-    val ed25519PrivateKeyParams = Ed25519PrivateKeyParameters(A.encode(),0)
-    val ed25519PublicKeyParams = Ed25519PublicKeyParameters(a.toByteArray(), 0)
+    val ed25519PublicKeyParams = Ed25519PublicKeyParameters(A.encode(), 0)
+    val ed25519PrivateKeyParams = Ed25519PrivateKeyParameters(a.toByteArray(),0)
 
-    return Pair(ed25519PrivateKeyParams,ed25519PublicKeyParams);
+    return Pair(ed25519PublicKeyParams,ed25519PrivateKeyParams);
 }
 
 
