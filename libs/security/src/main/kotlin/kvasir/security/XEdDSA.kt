@@ -4,60 +4,64 @@ import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters
 import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters
 import org.bouncycastle.crypto.params.X25519PrivateKeyParameters
 import org.bouncycastle.crypto.params.X25519PublicKeyParameters
+import org.bouncycastle.crypto.signers.Ed25519Signer
+import org.bouncycastle.jcajce.provider.asymmetric.edec.KeyFactorySpi
+import org.bouncycastle.math.ec.rfc8032.Ed25519
 import java.math.BigInteger
 import java.security.MessageDigest
+import kotlin.experimental.and
 
-private val sha512 = MessageDigest.getInstance("SHA-512")
+/*
 
+ */
+fun xeddsa_sign(x25519PrivateKey: X25519PrivateKeyParameters, message: ByteArray): ByteArray {
+    val (_, edPrivateKey) = calculate_key_pair(x25519PrivateKey)
+    val signer = Ed25519Signer()
+    signer.init(true, edPrivateKey)
+    signer.update(message, 0, message.size)
+    return signer.generateSignature()
+}
 
-fun hash_i(X: ByteArray, i: BigInteger): ByteArray {
-    val sha512 = MessageDigest.getInstance("SHA-512")
-
-    val bytesToHash = BigInteger.ONE.shiftLeft(256).minus(BigInteger.ONE).minus(i).toByteArray() + X
-
-    return sha512.digest(bytesToHash)
+fun xeddsa_verify(x25519PublicKey: X25519PublicKeyParameters, x25519PrivateKey: X25519PrivateKeyParameters, message: ByteArray, signature: ByteArray): Boolean {
+    //val edPublicKey = Ed25519PublicKeyParameters(x25519PublicKey.encoded, 0)
+    val pkey = x25519ToEd25519(x25519PublicKey.encoded)
+    val (edPublicKey:Ed25519PublicKeyParameters, _) = calculate_key_pair(x25519PrivateKey)
+    val pkey_encoded = edPublicKey.encoded
+    val verifier = Ed25519Signer()
+    verifier.init(false, edPublicKey)
+    verifier.update(message, 0, message.size)
+    return verifier.verifySignature(signature)
 }
 
 
-fun xeddsa_sign(k: X25519PrivateKeyParameters, message: ByteArray, Z: ByteArray): ByteArray {
-    // Calculate Public, Private Ed25519 keypair
-    val edwardsKeyPair = calculate_key_pair(k)
-    val A: Ed25519PublicKeyParameters = edwardsKeyPair.first;
-    val a: Ed25519PrivateKeyParameters = edwardsKeyPair.second
 
-    val r: ByteArray = BigInteger(hash_i(a.encoded + message + Z, BigInteger.ONE)).mod(q).toByteArray()
+fun x25519ToEd25519(x25519PublicKey: ByteArray): ByteArray? {
+    if (x25519PublicKey.size != 32) return null
 
-    val R: ByteArray = B.scalarMultiplication(r).encode()
+    val u = x25519PublicKey.reversedArray()
 
-    val h: ByteArray = BigInteger(sha512.digest(R + A.encoded + message)).mod(q).toByteArray()
+    val recip = BigInteger.ONE.modInverse(Curve25519Constants.p)
 
-    val s: ByteArray = BigInteger(r).add(BigInteger(h).multiply(BigInteger(a.encoded)) % q).toByteArray()
+    val y = MontgomeryPoint(BigInteger(u)).u_to_y().mod(Curve25519Constants.p).multiply(recip)
 
-    return R + s;
+//    // Compute x = sqrt((y^2 - 1) / (d * y^2 + 1)) mod p
+//    val y2 = y.multiply(y).mod(P)
+//    val num = y2.subtract(one).mod(P)
+//    val denom = D.multiply(y2).add(one).mod(P)
+//    val denomInv = denom.modInverse(P)
+//    val x2 = num.multiply(denomInv).mod(P)
+//
+//    // Compute square root of x2 mod p (assuming sign bit = 0)
+//    val x = sqrtModP(x2)
+//    if (x == null) return null // No valid square root found
+
+    // Encode Ed25519 public key (y + sign bit)
+    val ed25519PubKey = y.toByteArray().copyOf(32).reversedArray()
+    ed25519PubKey[31] = ed25519PubKey[31] and 0x7F.toByte() // Set sign bit to 0
+
+    return ed25519PubKey
 }
 
-fun xeddsa_verify(u: X25519PublicKeyParameters, message: ByteArray, signature: ByteArray): Boolean {
-    val R = signature.copyOfRange(0, 32)  // First 32 bytes are R
-    val s = signature.copyOfRange(32, 64)  // Next 32 bytes are s
-
-    if (BigInteger(u.encoded) >= p || BigInteger(R) >= BigInteger.ONE.shiftLeft(255) || BigInteger(s) >= BigInteger.ONE.shiftLeft(253)) {
-        return false
-    }
-
-    val A: EdwardsPoint = convert_mont(BigInteger(u.encoded))
-
-    if (!A.onCurve()) {
-        return false
-    }
-
-    val h: ByteArray = BigInteger(sha512.digest(R + A.encode() + message)).mod(q).toByteArray()
-    val Rcheck = BigInteger(s).multiply(BigInteger(B.encode())).minus(BigInteger(h).multiply(BigInteger(A.encode())))
-
-    if (R.equals(Rcheck)) {
-        return true
-    }
-    return false
-}
 
 
 
