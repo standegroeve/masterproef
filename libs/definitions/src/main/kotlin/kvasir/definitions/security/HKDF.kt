@@ -1,9 +1,8 @@
-package kvasir.security
+package kvasir.definitions.security
 
 import org.bouncycastle.crypto.digests.SHA256Digest
 import org.bouncycastle.crypto.generators.HKDFBytesGenerator
 import org.bouncycastle.crypto.params.HKDFParameters
-import org.bouncycastle.crypto.params.KeyParameter
 
 fun HKDF(salt: ByteArray, inputKeyingMaterial: ByteArray, info:ByteArray, outputLength: Int): ByteArray {
     val hkdf = HKDFBytesGenerator(SHA256Digest())

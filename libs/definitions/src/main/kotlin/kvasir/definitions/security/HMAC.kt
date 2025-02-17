@@ -1,12 +1,4 @@
-package kvasir.security
-
-import org.bouncycastle.crypto.KeyGenerationParameters
-import org.bouncycastle.crypto.digests.SHA256Digest
-import org.bouncycastle.crypto.generators.X25519KeyPairGenerator
-import org.bouncycastle.crypto.macs.HMac
-import org.bouncycastle.crypto.params.KeyParameter
-import org.bouncycastle.crypto.params.X25519PrivateKeyParameters
-
+package kvasir.definitions.security
 
 
 //fun HMAC(key: X25519PrivateKeyParameters, text: ByteArray): ByteArray {

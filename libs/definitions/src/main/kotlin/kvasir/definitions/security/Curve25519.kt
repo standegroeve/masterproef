@@ -1,25 +1,9 @@
-package kvasir.security;
+package kvasir.definitions.security;
 
-import com.sun.jdi.IntegerValue
-import jakarta.annotation.Nullable
 import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters
 import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters
 import org.bouncycastle.crypto.params.X25519PrivateKeyParameters
-import org.bouncycastle.jce.interfaces.ECPublicKey
-import org.bouncycastle.jce.spec.ECParameterSpec
-import org.bouncycastle.jce.spec.ECPublicKeySpec
-import org.bouncycastle.math.ec.rfc7748.X25519
-import org.bouncycastle.math.ec.rfc8032.Ed25519
-import org.eclipse.microprofile.openapi.models.parameters.Parameter.In
 import java.math.BigInteger
-import java.security.*
-import java.security.spec.EdECPrivateKeySpec
-import java.security.spec.EdECPublicKeySpec
-import java.security.spec.NamedParameterSpec
-import java.security.spec.X509EncodedKeySpec
-import javax.lang.model.type.NullType
-import kotlin.experimental.and
-import kotlin.experimental.or
 
 
 /*
