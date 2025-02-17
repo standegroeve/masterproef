@@ -42,11 +42,6 @@ object KvasirVocab {
     const val clientSecret = "${baseUri}clientSecret"
     const val profile = "${baseUri}profile"
     const val authServerUrl = "${baseUri}authServerUrl"
-    const val X3DHPreKeys = "${baseUri}X3DHPreKeys"
-    const val publicIdentityPrekey = "${baseUri}publicIdentityPreKey"
-    const val publicSignedPrekey = "${baseUri}publicSignedPreKey"
-    const val publicOneTimePrekeys = "${baseUri}publicOneTimePreKeys"
-    const val preKeySignature = "${baseUri}preKeySignature"
 }
 
 object KvasirNamedGraphs {

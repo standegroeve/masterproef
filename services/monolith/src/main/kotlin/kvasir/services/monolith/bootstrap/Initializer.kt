@@ -16,7 +16,6 @@ import kvasir.definitions.kg.*
 import kvasir.definitions.rdf.KvasirVocab
 import kvasir.definitions.reactive.skipToLast
 import kvasir.definitions.reactive.toUni
-import kvasir.definitions.security.generatePrekeys
 import kvasir.utils.s3.S3Utils
 import org.eclipse.microprofile.config.inject.ConfigProperty
 import java.util.*
@@ -42,7 +41,7 @@ class Initializer(
                 val podId = "${baseUri}${podConfig.name()}"
                 setupS3Bucket(podId)
                     .chain { _ -> setupAuth(podId, podConfig.name(), podConfig.authConfiguration()) }
-                    .chain { authConfig -> setupPod(podId, podConfig, authConfig, generatePrekeys()) }
+                    .chain { authConfig -> setupPod(podId, podConfig, authConfig) }
             }
             .concatenate()
             .onCompletion().invoke { initializationComplete.set(true) }
@@ -89,7 +88,7 @@ class Initializer(
         }
     }
 
-    private fun setupPod(podId: String, podConfig: StaticPodConfig, authConfig: AuthConfiguration, preKeys: X3DHPreKeys): Uni<Void> {
+    private fun setupPod(podId: String, podConfig: StaticPodConfig, authConfig: AuthConfiguration): Uni<Void> {
         Log.debug("Initializing database entry for pod '$podId'")
         return podStore.persist(
             Pod(
@@ -98,8 +97,7 @@ class Initializer(
                     KvasirVocab.authConfiguration to authConfig,
                     PodConfigurationProperty.DEFAULT_CONTEXT to Json.encode(podConfig.defaultContext()),
                     PodConfigurationProperty.AUTO_INGEST_RDF to podConfig.autoIngestRDF()
-                ).toMap(),
-                preKeys
+                ).toMap()
             )
         )
     }
