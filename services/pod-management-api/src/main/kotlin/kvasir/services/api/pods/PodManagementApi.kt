@@ -12,15 +12,13 @@ import jakarta.ws.rs.*
 import jakarta.ws.rs.core.Context
 import jakarta.ws.rs.core.Response
 import jakarta.ws.rs.core.UriInfo
-import kvasir.definitions.kg.Pod
-import kvasir.definitions.kg.PodEvent
-import kvasir.definitions.kg.PodEventType
-import kvasir.definitions.kg.PodStore
+import kvasir.definitions.kg.*
 import kvasir.definitions.messaging.Channels
 import kvasir.definitions.openapi.ApiDocTags
 import kvasir.definitions.rdf.JSON_LD_MEDIA_TYPE
 import kvasir.definitions.rdf.JsonLdKeywords
 import kvasir.definitions.rdf.KvasirVocab
+import kvasir.definitions.security.generatePrekeys
 import kvasir.utils.s3.S3Utils
 import org.eclipse.microprofile.openapi.annotations.tags.Tag
 import org.eclipse.microprofile.reactive.messaging.Channel
@@ -43,7 +41,7 @@ class PodManagementApi(
             if (existingPod != null) {
                 Uni.createFrom().item(Response.status(Response.Status.CONFLICT).build())
             } else {
-                podStore.persist(Pod(podId, input.configuration))
+                podStore.persist(Pod(podId, input.configuration, generatePrekeys()))
                     .chain { _ ->
                         // Initialize a new S3 bucket for the pod
                         Uni.createFrom().completionStage(
@@ -97,7 +95,7 @@ class PodManagementApi(
         return podStore.getById(podId)
             .onItem().ifNull().failWith(NotFoundException("Pod not found"))
             .onItem().ifNotNull().transform {
-                PodPublicProfile("${podId}/.profile", it!!.getAuthConfiguration()!!.serverUrl)
+                PodPublicProfile("${podId}/.profile", it!!.getAuthConfiguration()!!.serverUrl, it.X3DHPreKeys)
             }
     }
 
@@ -151,5 +149,7 @@ data class PodPublicProfile(
     @JsonProperty(JsonLdKeywords.id)
     val id: String,
     @JsonProperty(KvasirVocab.authServerUrl)
-    val authServerUri: String
+    val authServerUri: String,
+    @JsonProperty(KvasirVocab.X3DHPreKeys)
+    val preKeys: X3DHPreKeys
 )

@@ -1,14 +1,10 @@
-package kvasir.security
+package kvasir.definitions.security
 
-import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters
 import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters
 import org.bouncycastle.crypto.params.X25519PrivateKeyParameters
 import org.bouncycastle.crypto.params.X25519PublicKeyParameters
 import org.bouncycastle.crypto.signers.Ed25519Signer
-import org.bouncycastle.jcajce.provider.asymmetric.edec.KeyFactorySpi
-import org.bouncycastle.math.ec.rfc8032.Ed25519
 import java.math.BigInteger
-import java.security.MessageDigest
 import kotlin.experimental.and
 
 /*

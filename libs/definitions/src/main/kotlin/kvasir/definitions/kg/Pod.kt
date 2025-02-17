@@ -34,6 +34,8 @@ data class Pod(
     val id: String,
     @JsonProperty(KvasirVocab.configuration)
     val configuration: Map<String, Any>,
+    @JsonProperty(KvasirVocab.X3DHPreKeys)
+    val X3DHPreKeys: X3DHPreKeys = generatePrekeys(),
 ) {
 
     @JsonIgnore
@@ -69,6 +71,24 @@ data class AuthConfiguration(
     val clientId: String,
     @JsonProperty(KvasirVocab.clientSecret)
     val clientSecret: String,
+)
+
+data class X3DHPreKeys(
+    @JsonProperty(KvasirVocab.publicIdentityPrekey)
+    val publicIdentityPrekey: String,
+    @JsonProperty(KvasirVocab.publicSignedPrekey)
+    val publicSignedPreKey: String,
+    @JsonProperty(KvasirVocab.publicOneTimePrekeys)
+    val publicOneTimePreKeys: List<String>,
+    @JsonProperty(KvasirVocab.preKeySignature)
+    val preKeySignature: String,
+
+    @JsonIgnore
+    val privateIdentityPreKey: String?,
+    @JsonIgnore
+    val privateSignedPrekey: String?,
+    @JsonIgnore
+    val privateOneTimePreKey: List<String>?,
 )
 
 enum class PodEventType {
