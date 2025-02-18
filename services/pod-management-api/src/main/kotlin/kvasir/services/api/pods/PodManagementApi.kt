@@ -97,7 +97,11 @@ class PodManagementApi(
         return podStore.getById(podId)
             .onItem().ifNull().failWith(NotFoundException("Pod not found"))
             .onItem().ifNotNull().transform {
-                PodPublicProfile("${podId}/.profile", it!!.getAuthConfiguration()!!.serverUrl)
+                it?.x3dhKeys?.let { it1 ->
+                    PodPublicProfile("${podId}/.profile", it!!.getAuthConfiguration()!!.serverUrl,
+                        it1
+                    )
+                }
             }
     }
 
@@ -116,6 +120,24 @@ class PodManagementApi(
             }
         }
     }
+
+    @PermitAll
+    @PUT
+    @Consumes(JSON_LD_MEDIA_TYPE)
+    @Path("{podId}/x3dh")
+    fun x3dh(@PathParam("podId") podId: String, input: Map<String, Any>): Uni<Response> {
+        val podId = uriInfo.absolutePath.toString().substringBeforeLast("/x3dh")
+        return podStore.getById(podId).chain { existingPod ->
+            if (existingPod == null) {
+                Uni.createFrom().item(Response.status(Response.Status.NOT_FOUND).build())
+            } else {
+                podStore.persist(existingPod.copy(x3dhKeys = input.toString()))
+                    .chain { _ -> podEventEmitter.send(PodEvent(PodEventType.UPDATED, podId)) }
+                    .map { Response.noContent().build() }
+            }
+        }
+    }
+
 
     @DELETE
     @Path("{podId}")
@@ -151,5 +173,7 @@ data class PodPublicProfile(
     @JsonProperty(JsonLdKeywords.id)
     val id: String,
     @JsonProperty(KvasirVocab.authServerUrl)
-    val authServerUri: String
+    val authServerUri: String,
+    @JsonProperty(KvasirVocab.x3dhKeys)
+    val x3dhKeys: String
 )

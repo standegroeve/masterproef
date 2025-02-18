@@ -78,6 +78,7 @@ class KvasirTenantPolicyConfigResolver() : TenantPolicyConfigResolver {
             Uni.createFrom().item(
                 KeycloakPolicyEnforcerTenantConfig.builder()
                     .paths("/$tenantId/.profile").enforcementMode(PolicyEnforcerConfig.EnforcementMode.DISABLED)
+                    .paths("/$tenantId/x3dh").enforcementMode(PolicyEnforcerConfig.EnforcementMode.DISABLED)
                     .build()
             )
         }
