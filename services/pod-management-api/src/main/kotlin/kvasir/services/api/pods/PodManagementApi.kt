@@ -134,6 +134,24 @@ class PodManagementApi(
         }
     }
 
+    @PermitAll
+    @GET
+    @Produces
+    @Path("{podId}/x3dh")
+    fun getX3DH(@PathParam("podId") podId:String): Uni<String?> {
+        val podId = uriInfo.absolutePath.toString().substringBeforeLast("/x3dh")
+        return podStore.getById(podId)
+            .onItem().ifNull().failWith(NotFoundException("Pod not found"))
+            .onItem().ifNotNull().transform { pod ->
+                pod?.x3dhKeys
+                    ?.replace("=", ":")
+                    ?.replace("{@", "{\"")
+                    ?.replace("}", "\"}")
+                    ?.replace(", ", ",\"")
+                    ?.replace("kss:", "\"kss\":")
+                    ?: throw NotFoundException("X3DH keys not found for pod: $podId")  // Return the cleaned string or an empty string if null
+            }
+    }
 
     @DELETE
     @Path("{podId}")
