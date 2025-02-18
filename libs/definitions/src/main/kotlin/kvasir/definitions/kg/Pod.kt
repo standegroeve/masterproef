@@ -35,7 +35,7 @@ data class Pod(
     @JsonProperty(KvasirVocab.configuration)
     val configuration: Map<String, Any>,
     @JsonProperty(KvasirVocab.x3dhKeys)
-    val x3dhKeys: String? = null
+    val x3dhKeys: Map<String, Any>? = null
 ) {
 
     @JsonIgnore
