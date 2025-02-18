@@ -97,11 +97,7 @@ class PodManagementApi(
         return podStore.getById(podId)
             .onItem().ifNull().failWith(NotFoundException("Pod not found"))
             .onItem().ifNotNull().transform {
-                it?.x3dhKeys?.let { it1 ->
-                    PodPublicProfile("${podId}/.profile", it!!.getAuthConfiguration()!!.serverUrl,
-                        it1
-                    )
-                }
+                PodPublicProfile("${podId}/.profile", it!!.getAuthConfiguration()!!.serverUrl, it.x3dhKeys)
             }
     }
 
@@ -175,5 +171,5 @@ data class PodPublicProfile(
     @JsonProperty(KvasirVocab.authServerUrl)
     val authServerUri: String,
     @JsonProperty(KvasirVocab.x3dhKeys)
-    val x3dhKeys: String
+    val x3dhKeys: String?
 )
