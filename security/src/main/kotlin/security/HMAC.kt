@@ -1,4 +1,4 @@
-package kvasir.definitions.security
+package security
 
 
 //fun HMAC(key: X25519PrivateKeyParameters, text: ByteArray): ByteArray {

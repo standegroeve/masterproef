@@ -188,11 +188,11 @@ data class PodPublicProfile(
 
 data class PublicX3DHKeys(
     @JsonProperty(KvasirVocab.publicIdentityPreKey)
-    val ipk: String,
+    val publicIdentityPreKey: String,
     @JsonProperty(KvasirVocab.publicSignedPrekey)
-    val spk: String,
+    val publicSignedPrekey: String,
     @JsonProperty(KvasirVocab.publicOneTimePrekeys)
-    val opk: List<String>,
+    val publicOneTimePrekeys: List<String>,
     @JsonProperty(KvasirVocab.preKeySignature)
-    val sign: String,
+    val preKeySignature: String
 )

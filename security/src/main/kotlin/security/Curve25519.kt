@@ -1,4 +1,4 @@
-package kvasir.definitions.security;
+package security;
 
 import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters
 import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters
@@ -51,7 +51,7 @@ data class MontgomeryPoint(val u: BigInteger) {
         val denominatorInv = u.add(BigInteger.ONE).modInverse(Curve25519Constants.p)
 
         // divide by multiplying with the inverse
-        return u.minus(BigInteger.ONE).multiply(denominatorInv).mod(Curve25519Constants.p);
+        return u.minus(BigInteger.ONE).multiply(denominatorInv).mod(Curve25519Constants.p).modInverse(Curve25519Constants.p);
     }
 
     /*

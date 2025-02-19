@@ -13,6 +13,7 @@
         <module>libs</module>
         <module>plugins</module>
         <module>services</module>
+        <module>security</module>
     </modules>
 
     <properties>
