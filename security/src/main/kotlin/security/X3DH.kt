@@ -76,7 +76,6 @@ fun getPublicX3DHKeys(podId: String): X3DHPublicPreKeys {
 
 fun sendInitialMessage(actor: User, podId:String, privateKeyToCheat: X25519PrivateKeyParameters, preKeys: X3DHPreKeys): ByteArray {
     val targetPrekeys: X3DHPublicPreKeys = getPublicX3DHKeys(podId)
-    actor.targetIdentity = targetPrekeys.publicIdentityPreKey
 
     /*
         Verifiy signature
@@ -151,8 +150,6 @@ fun processInitialMessage(actor: User, podId: String, preKeys: X3DHPreKeys): Byt
      */
 
     val initieelBericht: Bericht = initieelBericht.toX25519()
-
-    actor.targetIdentity = initieelBericht.identityPreKey
 
     /*
         Calculate sharedKey
