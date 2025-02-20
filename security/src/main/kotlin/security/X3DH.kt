@@ -17,6 +17,8 @@ import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.bouncycastle.crypto.EphemeralKeyPair
 import org.bouncycastle.util.Integers
+import org.jboss.resteasy.reactive.common.providers.serialisers.BooleanMessageBodyHandler
+import security.messages.*
 
 
 fun uploadPreKeys(podId: String, preKeys: X3DHPublicPreKeys) {
@@ -72,8 +74,9 @@ fun getPublicX3DHKeys(podId: String): X3DHPublicPreKeys {
     }
 }
 
-fun sendInitialMessage(podId:String, privateKeyToCheat: X25519PrivateKeyParameters, preKeys: X3DHPreKeys): ByteArray {
+fun sendInitialMessage(actor: User, podId:String, privateKeyToCheat: X25519PrivateKeyParameters, preKeys: X3DHPreKeys): ByteArray {
     val targetPrekeys: X3DHPublicPreKeys = getPublicX3DHKeys(podId)
+    actor.targetIdentity = targetPrekeys.publicIdentityPreKey
 
     /*
         Verifiy signature
@@ -141,13 +144,15 @@ private var initieelBericht: BerichtAsString = BerichtAsString(
     ciphertext = ""
 )
 
-fun processInitialMessage(podId: String, preKeys: X3DHPreKeys): ByteArray {
+fun processInitialMessage(actor: User, podId: String, preKeys: X3DHPreKeys): ByteArray {
     /*
         Fetch initial message
         TODO: Fetch the initial message now its stored locally
      */
 
     val initieelBericht: Bericht = initieelBericht.toX25519()
+
+    actor.targetIdentity = initieelBericht.identityPreKey
 
     /*
         Calculate sharedKey
@@ -175,9 +180,12 @@ fun processInitialMessage(podId: String, preKeys: X3DHPreKeys): ByteArray {
     val plaintext = aesGcmDecrypt(initieelBericht.ciphertext, sharedKey, associatedData)
 
     if (plaintext != null) {
-        /*
-            TODO: Remove oneTimePrekey from Bobs PreKeys
-         */
+        actor.preKeys = actor.preKeys?.let {
+            preKeys.copy(
+                publicOneTimePrekeys = it.publicOneTimePrekeys.filterIndexed { index, _ -> index !in initieelBericht.preKeyIdentifiers},
+                privateOneTimePrekeys = it.privateOneTimePrekeys.filterIndexed { index, _ -> index !in initieelBericht.preKeyIdentifiers}
+            )
+        }
     }
 
     return sharedKey
