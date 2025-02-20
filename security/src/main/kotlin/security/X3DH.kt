@@ -18,29 +18,6 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.bouncycastle.crypto.EphemeralKeyPair
 import org.bouncycastle.util.Integers
 
-data class X3DHPublicPreKeys(
-    val publicIdentityPreKey: X25519PublicKeyParameters,
-    val publicSignedPrekey: X25519PublicKeyParameters,
-    val publicOneTimePrekeys: List<X25519PublicKeyParameters>,
-    val preKeySignature: ByteArray
-)
-
-@JsonIgnoreProperties(ignoreUnknown = true)
-data class X3DHPublicKeysAsString(
-    @JsonProperty("kss:publicIdentityPreKey") val publicIdentityPreKey: String,
-    @JsonProperty("kss:publicSignedPrekey") val publicSignedPrekey: String,
-    @JsonProperty("kss:publicOneTimePrekeys") val publicOneTimePrekeys: List<String>,
-    @JsonProperty("kss:preKeySignature") val preKeySignature: String
-) {
-    fun convertToX25519(): X3DHPublicPreKeys {
-        return X3DHPublicPreKeys(
-            publicIdentityPreKey = X25519PublicKeyParameters(Base64.getDecoder().decode(publicIdentityPreKey)),
-            publicSignedPrekey = X25519PublicKeyParameters(Base64.getDecoder().decode(publicSignedPrekey)),
-            publicOneTimePrekeys = publicOneTimePrekeys.map { X25519PublicKeyParameters(Base64.getDecoder().decode(it)) },
-            preKeySignature = Base64.getDecoder().decode(preKeySignature)
-        )
-    }
-}
 
 fun uploadPreKeys(podId: String, preKeys: X3DHPublicPreKeys) {
     val client = OkHttpClient()
@@ -52,13 +29,10 @@ fun uploadPreKeys(podId: String, preKeys: X3DHPublicPreKeys) {
             },
             "kss:publicIdentityPreKey": "${Base64.getEncoder().encodeToString(preKeys.publicIdentityPreKey.encoded)}",
             "kss:publicSignedPrekey": "${Base64.getEncoder().encodeToString(preKeys.publicSignedPrekey.encoded)}",
-            "kss:publicOneTimePrekeys": [${preKeys.publicOneTimePrekeys.joinToString(", ") { "\"${Base64.getEncoder().encodeToString(it.encoded)}\"" }}],
+            "kss:publicOneTimePrekeys": [${preKeys.publicOneTimePrekeys?.joinToString(", ") { "\"${Base64.getEncoder().encodeToString(it.encoded)}\"" }}],
             "kss:preKeySignature": "${Base64.getEncoder().encodeToString(preKeys.preKeySignature)}"
         }
     """.trimIndent()
-
-    val b = Base64.getEncoder().encodeToString(preKeys.preKeySignature)
-    val a = Base64.getDecoder().decode(Base64.getEncoder().encodeToString(preKeys.preKeySignature))
 
     val requestBody = jsonLd.toRequestBody("application/ld+json".toMediaType())
 
@@ -75,11 +49,13 @@ fun uploadPreKeys(podId: String, preKeys: X3DHPublicPreKeys) {
     }
 }
 
+
+
 fun getPublicX3DHKeys(podId: String): X3DHPublicPreKeys {
     val client = OkHttpClient()
 
     val requestGet = Request.Builder()
-        .url("http://localhost:8080/bob/x3dh")
+        .url("http://localhost:8080/${podId}/x3dh")
         .get()
         .build()
 
@@ -96,9 +72,12 @@ fun getPublicX3DHKeys(podId: String): X3DHPublicPreKeys {
     }
 }
 
-fun sendInitialMessage(podId:String, privateKeyToCheat: X25519PrivateKeyParameters, preKeys: X3DHPreKeys) {
+fun sendInitialMessage(podId:String, privateKeyToCheat: X25519PrivateKeyParameters, preKeys: X3DHPreKeys): ByteArray {
     val targetPrekeys: X3DHPublicPreKeys = getPublicX3DHKeys(podId)
 
+    /*
+        Verifiy signature
+     */
     val verified = xeddsa_verify(targetPrekeys.publicIdentityPreKey, privateKeyToCheat, targetPrekeys.publicSignedPrekey.encoded, targetPrekeys.preKeySignature)
 
     println(verified)
@@ -107,11 +86,99 @@ fun sendInitialMessage(podId:String, privateKeyToCheat: X25519PrivateKeyParamete
         throw RuntimeException("Signature Verification failed")
     }
 
-    val DH1 = DiffieHellman(preKeys.privateIdentityPreKey, targetPrekeys.publicSignedPrekey)
+    /*
+        Calculate sharedKey
+     */
+    val ephemeralKeyPair = generateX25519KeyPair()
 
-    val a = 2
+    val DH1 = DiffieHellman(preKeys.privateIdentityPreKey, targetPrekeys.publicSignedPrekey)
+    val DH2 = DiffieHellman(ephemeralKeyPair.second, targetPrekeys.publicIdentityPreKey)
+    val DH3 = DiffieHellman(ephemeralKeyPair.second, targetPrekeys.publicSignedPrekey)
+
+    val F = ByteArray(32) { 0xFF.toByte() }
+    val salt = ByteArray(32) { 0x00.toByte() }
+    val info = ByteArray(0)
+
+    val oneTimeKeysUsed = mutableListOf<Int>()
+    var sharedKey: ByteArray
+    if (targetPrekeys.publicOneTimePrekeys == null) {
+        sharedKey = HKDF(salt, F + DH1 + DH2 + DH3, info, 32)
+
+    } else {
+        val DH4 = DiffieHellman(ephemeralKeyPair.second, targetPrekeys.publicOneTimePrekeys.first())
+        oneTimeKeysUsed.add(0)
+        sharedKey = HKDF(salt, F+ DH1 + DH2 + DH3 + DH4, info, 32)
+    }
+
+    /*
+        Generate ciphertext
+     */
+    val associatedData: ByteArray = preKeys.publicIdentityPreKey.encoded + targetPrekeys.publicIdentityPreKey.encoded
+    val plaintext: ByteArray = "Handshake send initial message".toByteArray()
+    val ciphertext = aesGcmEncrypt(plaintext, sharedKey, associatedData)
+
+
+    /*
+        Send the Initial Message
+
+        TODO Send the message, now its stored locally for testing
+     */
+    initieelBericht = BerichtAsString(
+        identityPreKey = Base64.getEncoder().encodeToString(preKeys.publicIdentityPreKey.encoded),
+        ephemeralPreKey = Base64.getEncoder().encodeToString(ephemeralKeyPair.first.encoded),
+        preKeyIdentifiers = oneTimeKeysUsed,
+        ciphertext = Base64.getEncoder().encodeToString(ciphertext)
+    )
+
+
+    return sharedKey
 }
 
-fun processInitialMessage() {
+private var initieelBericht: BerichtAsString = BerichtAsString(
+    identityPreKey = "",
+    ephemeralPreKey = "",
+    preKeyIdentifiers = emptyList<Int>(),
+    ciphertext = ""
+)
 
+fun processInitialMessage(podId: String, preKeys: X3DHPreKeys): ByteArray {
+    /*
+        Fetch initial message
+        TODO: Fetch the initial message now its stored locally
+     */
+
+    val initieelBericht: Bericht = initieelBericht.toX25519()
+
+    /*
+        Calculate sharedKey
+     */
+
+    val DH1 = DiffieHellman(preKeys.privateSignedPrekey, initieelBericht.identityPreKey)
+    val DH2 = DiffieHellman(preKeys.privateIdentityPreKey, initieelBericht.ephemeralPreKey)
+    val DH3 = DiffieHellman(preKeys.privateSignedPrekey, initieelBericht.ephemeralPreKey)
+
+    val F = ByteArray(32) { 0xFF.toByte() }
+    val salt = ByteArray(32) { 0x00.toByte() }
+    val info = ByteArray(0)
+
+    var sharedKey: ByteArray
+    if (initieelBericht.preKeyIdentifiers.isEmpty()) {
+        sharedKey = HKDF(salt, F + DH1 + DH2 + DH3, info, 32)
+
+    } else {
+        val DH4 = DiffieHellman(preKeys.privateOneTimePrekeys.first(), initieelBericht.ephemeralPreKey)
+        sharedKey = HKDF(salt, F+ DH1 + DH2 + DH3 + DH4, info, 32)
+    }
+
+    val associatedData: ByteArray = initieelBericht.identityPreKey.encoded + preKeys.publicIdentityPreKey.encoded
+
+    val plaintext = aesGcmDecrypt(initieelBericht.ciphertext, sharedKey, associatedData)
+
+    if (plaintext != null) {
+        /*
+            TODO: Remove oneTimePrekey from Bobs PreKeys
+         */
+    }
+
+    return sharedKey
 }

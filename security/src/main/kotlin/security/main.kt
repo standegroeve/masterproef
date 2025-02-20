@@ -9,28 +9,57 @@ import okhttp3.Response
 import org.bouncycastle.crypto.params.X25519PrivateKeyParameters
 
 fun main() {
+    /*
+
+
+        START X3DH
+
+
+     */
+
+
     // Bob want to enable Alice to get access to its pod
     // So they can exchange messages via this pod
-
-    val podId = "bob"
 
     /*
         Step 0: Generate Prekeys
      */
 
-    val AliceKeys: X3DHPreKeys = generatePrekeys()
-    val BobKeys: X3DHPreKeys = generatePrekeys()
-
+    val Alice = User("alice")
+    val Bob = User("bob")
+    Alice.preKeys = generatePrekeys()
+    Bob.preKeys = generatePrekeys()
 
     /*
         STEP 1: Place Keys on Server
+        (From Bob)
      */
 
-     uploadPreKeys(podId, BobKeys.getPublic())
+     uploadPreKeys(Bob.podId, Bob.preKeys!!.getPublic())
 
     /*
         STEP 2: Send the Initial Message
+        (From Alice)
      */
 
-    sendInitialMessage(podId, BobKeys.privateIdentityPreKey, AliceKeys)
+    Alice.sharedKey = sendInitialMessage(Bob.podId, Bob.preKeys!!.privateIdentityPreKey, Alice.preKeys!!)
+
+    /*
+        STEP 3: Process the Initial Message
+        (From Bob)
+     */
+
+    Bob.sharedKey = processInitialMessage(Bob.podId, Bob.preKeys!!)
+
+    val a = 2
+
+
+    /*
+
+
+        X3DH FINISHED
+
+
+     */
+
 }
