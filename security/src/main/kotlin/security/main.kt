@@ -42,14 +42,14 @@ fun main() {
         (From Alice)
      */
 
-    Alice.sharedKey = sendInitialMessage(Bob.podId, Bob.preKeys!!.privateIdentityPreKey, Alice.preKeys!!)
+    Alice.sharedKey = sendInitialMessage(Alice, Bob.podId, Bob.preKeys!!.privateIdentityPreKey, Alice.preKeys!!)
 
     /*
         STEP 3: Process the Initial Message
         (From Bob)
      */
 
-    Bob.sharedKey = processInitialMessage(Bob.podId, Bob.preKeys!!)
+    Bob.sharedKey = processInitialMessage(Bob, Bob.podId, Bob.preKeys!!)
 
     val a = 2
 

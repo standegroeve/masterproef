@@ -7,9 +7,7 @@ import org.bouncycastle.crypto.signers.Ed25519Signer
 import java.math.BigInteger
 import kotlin.experimental.and
 
-/*
 
- */
 fun xeddsa_sign(x25519PrivateKey: X25519PrivateKeyParameters, message: ByteArray): ByteArray {
     val (_, edPrivateKey) = calculate_key_pair(x25519PrivateKey)
     val signer = Ed25519Signer()
