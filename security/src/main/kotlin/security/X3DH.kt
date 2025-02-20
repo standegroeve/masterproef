@@ -15,51 +15,8 @@ import java.security.SecureRandom
 import java.util.*
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-
-fun generateX25519KeyPair(): Pair<X25519PublicKeyParameters, X25519PrivateKeyParameters> {
-    val secureRandom = SecureRandom()
-    // Key generation parameters
-    val keyGenParams = KeyGenerationParameters(secureRandom, 256)
-    val keyPairGenerator = org.bouncycastle.crypto.generators.X25519KeyPairGenerator()
-    keyPairGenerator.init(keyGenParams)
-    val keyPair = keyPairGenerator.generateKeyPair()
-    val privateKey = keyPair.private as X25519PrivateKeyParameters
-    val publicKey = keyPair.public as X25519PublicKeyParameters
-    return Pair(publicKey, privateKey)
-}
-
-fun generatePrekeys(): X3DHPreKeys {
-    val identityKeyPair: Pair<X25519PublicKeyParameters, X25519PrivateKeyParameters> = generateX25519KeyPair()
-    val signedPreKeyPair: Pair<X25519PublicKeyParameters, X25519PrivateKeyParameters> = generateX25519KeyPair()
-    val signature: ByteArray = xeddsa_sign(identityKeyPair.second, signedPreKeyPair.first.encoded)
-    // create a list with one-time keyPairs
-    val oneTimePreKeyPairs: List<Pair<X25519PublicKeyParameters, X25519PrivateKeyParameters>> = (1..5).map {
-        generateX25519KeyPair()
-    }
-    return X3DHPreKeys(
-        identityKeyPair.first,
-        signedPreKeyPair.first,
-        oneTimePreKeyPairs.map { it.first },
-        signature,
-        identityKeyPair.second,
-        signedPreKeyPair.second,
-        oneTimePreKeyPairs.map { it.second },
-    )
-}
-
-data class X3DHPreKeys(
-    val publicIdentityPreKey: X25519PublicKeyParameters,
-    val publicSignedPrekey: X25519PublicKeyParameters,
-    val publicOneTimePrekeys: List<X25519PublicKeyParameters>,
-    val preKeySignature: ByteArray,
-    val privateIdentityPreKey: X25519PrivateKeyParameters,
-    val privateSignedPrekey: X25519PrivateKeyParameters,
-    val privateOneTimePrekeys: List<X25519PrivateKeyParameters>
-) {
-    fun getPublic(): X3DHPublicPreKeys {
-        return X3DHPublicPreKeys(publicIdentityPreKey, publicSignedPrekey, publicOneTimePrekeys, preKeySignature)
-    }
-}
+import org.bouncycastle.crypto.EphemeralKeyPair
+import org.bouncycastle.util.Integers
 
 data class X3DHPublicPreKeys(
     val publicIdentityPreKey: X25519PublicKeyParameters,
