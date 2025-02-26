@@ -10,39 +10,46 @@ import java.util.*
 class User(val podId: String) {
     var preKeys: X3DHPreKeys? = null
     var sharedKey: ByteArray? = null // chain key
+    var sendingKey: ByteArray? = null // sending chain key
+    var receivingKey: ByteArray? = null // receiving chain key
 
     var prevPublicKey: ByteArray? = null
-    var DHKeyPair: Pair<X25519PublicKeyParameters, X25519PrivateKeyParameters>? = null
+    var DHKeyPair: Pair<X25519PublicKeyParameters, X25519PrivateKeyParameters> = generateX25519KeyPair()
 
 
-    fun DiffieHellmanRatchet(publicKey: ByteArray): Pair<ByteArray?, ByteArray?>? {
+    fun DiffieHellmanRatchet(publicKey: ByteArray): Pair<ByteArray, ByteArray>? {
         if (publicKey.contentEquals(prevPublicKey)) {
             return null
         }
 
-        var result: Pair<ByteArray?, ByteArray?>?
-        if (DHKeyPair == null) {
-            // Happens only at the start when no public key has been exchanged
-            DHKeyPair = generateX25519KeyPair()
-            result = Pair(null, DiffieHellman(DHKeyPair!!.second, X25519PublicKeyParameters(publicKey,0)))
-        } else {
-            val DH1 = DiffieHellman(DHKeyPair!!.second, X25519PublicKeyParameters(publicKey,0))
-            DHKeyPair = generateX25519KeyPair()
-            val DH2 =  DiffieHellman(DHKeyPair!!.second, X25519PublicKeyParameters(publicKey,0))
-            result = Pair(DH1, DH2)
-        }
+        val DH1 = DiffieHellman(DHKeyPair.second, X25519PublicKeyParameters(publicKey,0))
+        DHKeyPair = generateX25519KeyPair()
+        val DH2 =  DiffieHellman(DHKeyPair.second, X25519PublicKeyParameters(publicKey,0))
         prevPublicKey = publicKey
         // return previous and current DH output
-        return result
+        return Pair(DH1, DH2)
     }
 
-    fun SymmetricKeyRatchet(DHOutput: ByteArray): Pair<ByteArray, ByteArray> {
-        val chainKey: ByteArray = sharedKey!!
-        val prk: ByteArray = HKDF(salt = chainKey, inputKeyingMaterial = DHOutput, info = "prk".toByteArray(), outputLength = 32)
+    fun SymmetricKeyRatchetRoot(inputKeyingMaterial: ByteArray): ByteArray {
+        val prk: ByteArray = HKDF(salt = sharedKey!!, inputKeyingMaterial = inputKeyingMaterial, info = "prk".toByteArray(), outputLength = 32)
         val newChainKey: ByteArray = HKDF(salt = prk, inputKeyingMaterial = ByteArray(0), info = "chain".toByteArray(), outputLength = 32)
         val messageKey: ByteArray = HKDF(salt = prk, inputKeyingMaterial = ByteArray(0), info = "message".toByteArray(), outputLength = 32)
         sharedKey = newChainKey
-        return Pair(newChainKey, messageKey)
+        return messageKey
+    }
+
+    fun SymmetricKeyRatchetNonRoot(sendingRatchet: Boolean): ByteArray {
+        val chainKey = if (sendingRatchet) sendingKey else receivingKey
+
+        val prk: ByteArray = HKDF(salt = chainKey!!, inputKeyingMaterial = ByteArray(0), info = "prk".toByteArray(), outputLength = 32)
+        val newChainKey: ByteArray = HKDF(salt = prk, inputKeyingMaterial = ByteArray(0), info = "chain".toByteArray(), outputLength = 32)
+        val messageKey: ByteArray = HKDF(salt = prk, inputKeyingMaterial = ByteArray(0), info = "message".toByteArray(), outputLength = 32)
+
+        if (sendingRatchet)
+            sendingKey = newChainKey
+        else
+            receivingKey = newChainKey
+        return messageKey
     }
 }
 
