@@ -73,37 +73,19 @@ fun main() {
 
     /*
         SITUATION 1: Initialisation of Alice
-     */
-
-    val InitialDHOutputA = DiffieHellman(Alice.DHKeyPair.second, Bob.DHKeyPair.first)
-    val SKROutputs = Alice.SymmetricKeyRatchetRoot(InitialDHOutputA)
-    Alice.sendingKey = SKROutputs
-
-    /*
+                    +
         SITUATION 2: Alice sends message
      */
 
-    val SKRSending = Alice.SymmetricKeyRatchetNonRoot(true)
-    val A1 = SKRSending
+    val messageA1 = Alice.sendInitialMessage()
 
-    val AliceMessage1 = Message(Alice.DHKeyPair.first.encoded, A1)
 
     /*
         SITUATION 3: Bob receives message
      */
 
-    val DHOutputsB = Bob.DiffieHellmanRatchet(Alice.DHKeyPair.first.encoded)
-    val SKROutputsBR = Bob.SymmetricKeyRatchetRoot(DHOutputsB?.first!!)
-    Bob.receivingKey = SKROutputsBR
-    val SKROutputsBS = Bob.SymmetricKeyRatchetRoot(DHOutputsB.second)
-    Bob.sendingKey = SKROutputsBS
 
-    // Getting receivingKey
-
-    val SKRReceiving = Bob.SymmetricKeyRatchetNonRoot(false)
-    val A1Decrypt = SKRReceiving
-
-    val bobToBeDecrypted1 = Message(Bob.DHKeyPair.first.encoded, A1Decrypt)
+    val messageA1Decrypted = Bob.receiveMessage(messageA1.publicKey)
 
     val b = 2
 
@@ -114,34 +96,14 @@ fun main() {
 
     // Bob creates and sends messages
 
-    val B1 = Bob.SymmetricKeyRatchetNonRoot(true)
-    val e = Bob.sendingKey
-    val messageB1 = Message(Bob.DHKeyPair.first.encoded, Bob.sendingKey!!)
-    val B2 = Bob.SymmetricKeyRatchetNonRoot(true)
-    val messageB2 = Message(Bob.DHKeyPair.first.encoded, B2)
+    val messageB1 = Bob.sendMessage()
+    val messageB2 = Bob.sendMessage()
 
     // Alice receives message
 
-
-    if (messageB1.publicKey == Alice.prevPublicKey) {
-        throw RuntimeException("Public keys hould not be the same !!!")
-    }
-
-    val DHOutputsB12 = Alice.DiffieHellmanRatchet(messageB1.publicKey)
-    Alice.receivingKey = Alice.SymmetricKeyRatchetRoot(DHOutputsB12!!.first)
-    Alice.sendingKey = Alice.SymmetricKeyRatchetRoot(DHOutputsB12.second)
-    val B1Decrypt = Alice.SymmetricKeyRatchetNonRoot(false)
-
-    val messageB1Decrypt = Message(Bob.DHKeyPair.first.encoded, B1Decrypt)
-
-    val B2Decrypt = Alice.SymmetricKeyRatchetNonRoot(false)
-    val messageB2Decrypt = Message(Bob.DHKeyPair.first.encoded, B2Decrypt)
+    val messageB1Decrypt = Alice.receiveMessage(messageB1.publicKey)
+    val messageB2Decrypt = Alice.receiveMessage(messageB2.publicKey)
 
     val c = 2
 
 }
-
-data class Message(
-    val publicKey: ByteArray,
-    val encryptionKey: ByteArray
-)

@@ -77,6 +77,8 @@ fun getPublicX3DHKeys(podId: String): X3DHPublicPreKeys {
 fun sendInitialMessage(actor: User, podId:String, privateKeyToCheat: X25519PrivateKeyParameters, preKeys: X3DHPreKeys): ByteArray {
     val targetPrekeys: X3DHPublicPreKeys = getPublicX3DHKeys(podId)
 
+    actor.targetPublicKey = targetPrekeys.publicSignedPrekey.encoded
+    actor.DHKeyPair = generateX25519KeyPair()
     /*
         Verifiy signature
      */
@@ -148,6 +150,8 @@ fun processInitialMessage(actor: User, podId: String, preKeys: X3DHPreKeys): Byt
         Fetch initial message
         TODO: Fetch the initial message now its stored locally
      */
+
+    actor.DHKeyPair = Pair(actor.preKeys!!.publicSignedPrekey, actor.preKeys!!.privateSignedPrekey)
 
     val initieelBericht: Bericht = initieelBericht.toX25519()
 
