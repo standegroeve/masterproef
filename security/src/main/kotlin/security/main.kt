@@ -77,15 +77,15 @@ fun main() {
         SITUATION 2: Alice sends message
      */
 
-    val messageA1 = Alice.sendInitialMessage()
-
+    val messageA1 = Alice.sendInitialMessage("initialMessage".toByteArray())
 
     /*
         SITUATION 3: Bob receives message
      */
 
 
-    val messageA1Decrypted = Bob.receiveMessage(messageA1.publicKey)
+    val messageA1Decrypt = Bob.receiveMessage(messageA1, messageA1.publicKey)
+    val string = String(messageA1Decrypt.cipherText, Charsets.UTF_8)
 
     val b = 2
 
@@ -96,13 +96,16 @@ fun main() {
 
     // Bob creates and sends messages
 
-    val messageB1 = Bob.sendMessage()
-    val messageB2 = Bob.sendMessage()
+    val messageB1 = Bob.sendMessage("test_sending_message".toByteArray())
+    val messageB2 = Bob.sendMessage("test2".toByteArray())
 
     // Alice receives message
 
-    val messageB1Decrypt = Alice.receiveMessage(messageB1.publicKey)
-    val messageB2Decrypt = Alice.receiveMessage(messageB2.publicKey)
+    val messageB1Decrypt = Alice.receiveMessage(messageB1, messageB1.publicKey)
+    val messageB2Decrypt = Alice.receiveMessage(messageB2, messageB2.publicKey)
+
+    val string1 = String(messageB1Decrypt.cipherText, Charsets.UTF_8)
+    val string2 = String(messageB2Decrypt.cipherText, Charsets.UTF_8)
 
     val c = 2
 

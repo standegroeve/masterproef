@@ -53,14 +53,17 @@ class User(val podId: String) {
         return messageKey
     }
 
-    fun sendInitialMessage(): Message {
+    fun sendInitialMessage(input: ByteArray): Message {
         DHKeyPair = generateX25519KeyPair()
         val initialDHoutput = DiffieHellman(DHKeyPair!!.second, X25519PublicKeyParameters(targetPublicKey))
         sendingKey = SymmetricKeyRatchetRoot(initialDHoutput)
-        return sendMessage()
+        return sendMessage(input)
     }
 
-    fun sendMessage(): Message {
+    fun sendMessage(input: ByteArray): Message {
+        /*
+            TODO: Send message to message system
+         */
 //        if (!publicKey.contentEquals(prevPublicKey)) {
 //            // Does a DH ratchet when we receive a new public key
 //            val dhOutputs = DiffieHellmanRatchet(publicKey)
@@ -69,10 +72,16 @@ class User(val podId: String) {
 //        }
         // generates the new sendingKey
         val messageKey = SymmetricKeyRatchetNonRoot(true)
-        return Message(DHKeyPair!!.first.encoded, messageKey)
+        // encrypt message
+        val ciphertext = aesGcmEncrypt(input, messageKey, DHKeyPair!!.first.encoded)
+        return Message(DHKeyPair!!.first.encoded, ciphertext!!)
     }
 
-    fun receiveMessage(publicKey: ByteArray): Message {
+    fun receiveMessage(message: Message, publicKey: ByteArray): Message {
+        /*
+            TODO: Fetch message from message system
+         */
+
         if (!publicKey.contentEquals(prevPublicKey)) {
             // Does a DH ratchet when we receive a new public key
             val dhOutputs = DiffieHellmanRatchet(publicKey)
@@ -81,13 +90,15 @@ class User(val podId: String) {
         }
         // generates the new receivingKey
         val messageKey = SymmetricKeyRatchetNonRoot(false)
-        return Message(publicKey, messageKey)
+        // decrypt message
+        val plaintext = aesGcmDecrypt(message.cipherText, messageKey, publicKey)
+        return Message(publicKey, plaintext!!)
     }
 }
 
 data class Message(
     val publicKey: ByteArray,
-    val encryptionKey: ByteArray
+    val cipherText: ByteArray
 )
 
 
