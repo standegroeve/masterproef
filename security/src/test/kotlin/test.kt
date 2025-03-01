@@ -17,7 +17,7 @@ class securityTests() {
         X3DH.uploadPreKeys(Bob.podId, Bob.preKeys!!.getPublic())
 
         // STEP 2: Send the Initial Message (From Alice)
-        Alice.sharedKey = X3DH.sendInitialMessage(Alice, Bob.podId, Bob.preKeys!!.privateIdentityPreKey, Alice.preKeys!!)
+        Alice.sharedKey = X3DH.sendInitialMessage(Alice, Bob.podId, Alice.preKeys!!)
 
         // STEP 3: Process the Initial Message (From Bob)
         Bob.sharedKey = X3DH.processInitialMessage(Bob, Bob.podId, Bob.preKeys!!)
@@ -33,7 +33,7 @@ class securityTests() {
         Bob.preKeys = generatePrekeys()
         /* START X3DH */
         X3DH.uploadPreKeys(Bob.podId, Bob.preKeys!!.getPublic())
-        Alice.sharedKey = X3DH.sendInitialMessage(Alice, Bob.podId, Bob.preKeys!!.privateIdentityPreKey, Alice.preKeys!!)
+        Alice.sharedKey = X3DH.sendInitialMessage(Alice, Bob.podId, Alice.preKeys!!)
         Bob.sharedKey = X3DH.processInitialMessage(Bob, Bob.podId, Bob.preKeys!!)
         /* X3DH FINISHED - START DOUBLE RATCHET ALGORITHM */
 

@@ -36,7 +36,7 @@ fun main() {
         (From Alice)
      */
 
-    Alice.sharedKey = X3DH.sendInitialMessage(Alice, Bob.podId, Bob.preKeys!!.privateIdentityPreKey, Alice.preKeys!!)
+    Alice.sharedKey = X3DH.sendInitialMessage(Alice, Bob.podId, Alice.preKeys!!)
 
     /*
         STEP 3: Process the Initial Message

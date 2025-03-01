@@ -7,6 +7,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.bouncycastle.crypto.params.X25519PrivateKeyParameters
 import java.util.*
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import org.bouncycastle.crypto.params.X25519PublicKeyParameters
 import security.crypto.*
 import security.messages.*
 
@@ -20,7 +21,8 @@ object X3DH {
             "@context": {
                 "kss": "https://kvasir.discover.ilabt.imec.be/vocab#"
             },
-            "kss:publicIdentityPreKey": "${Base64.getEncoder().encodeToString(preKeys.publicIdentityPreKey.encoded)}",
+            "kss:publicIdentityPreKeyEd25519": "${Base64.getEncoder().encodeToString(preKeys.publicIdentityPreKeyEd25519.encoded)}",
+            "kss:publicIdentityPreKeyX25519": "${Base64.getEncoder().encodeToString(preKeys.publicIdentityPreKeyX25519.encoded)}",
             "kss:publicSignedPrekey": "${Base64.getEncoder().encodeToString(preKeys.publicSignedPrekey.encoded)}",
             "kss:publicOneTimePrekeys": [${
             preKeys.publicOneTimePrekeys?.joinToString(", ") {
@@ -73,20 +75,18 @@ object X3DH {
     fun sendInitialMessage(
         actor: User,
         podId: String,
-        privateKeyToCheat: X25519PrivateKeyParameters,
         preKeys: X3DHPreKeys
     ): ByteArray {
         val targetPrekeys: X3DHPublicPreKeys = getPublicX3DHKeys(podId)
 
         actor.initialDHPublicKey = targetPrekeys.publicSignedPrekey.encoded
-        actor.targetPublicKey = targetPrekeys.publicIdentityPreKey.encoded
+        actor.targetPublicKey = targetPrekeys.publicIdentityPreKeyX25519.encoded
         actor.DHKeyPair = generateX25519KeyPair()
         /*
         Verifiy signature
      */
         val verified = xeddsa_verify(
-            targetPrekeys.publicIdentityPreKey,
-            privateKeyToCheat,
+            targetPrekeys.publicIdentityPreKeyEd25519,
             targetPrekeys.publicSignedPrekey.encoded,
             targetPrekeys.preKeySignature
         )
@@ -101,7 +101,7 @@ object X3DH {
         val ephemeralKeyPair = generateX25519KeyPair()
 
         val DH1 = DiffieHellman(preKeys.privateIdentityPreKey, targetPrekeys.publicSignedPrekey)
-        val DH2 = DiffieHellman(ephemeralKeyPair.second, targetPrekeys.publicIdentityPreKey)
+        val DH2 = DiffieHellman(ephemeralKeyPair.second, X25519PublicKeyParameters(targetPrekeys.publicIdentityPreKeyX25519.encoded))
         val DH3 = DiffieHellman(ephemeralKeyPair.second, targetPrekeys.publicSignedPrekey)
 
         val F = ByteArray(32) { 0xFF.toByte() }
@@ -123,7 +123,7 @@ object X3DH {
         Generate ciphertext
      */
         val associatedData: ByteArray =
-            preKeys.publicIdentityPreKey.encoded + targetPrekeys.publicIdentityPreKey.encoded
+            preKeys.publicIdentityPreKey.encoded + targetPrekeys.publicIdentityPreKeyX25519.encoded
         val plaintext: ByteArray = "Handshake send initial message".toByteArray()
         val ciphertext = aesGcmEncrypt(plaintext, sharedKey, associatedData)
 
