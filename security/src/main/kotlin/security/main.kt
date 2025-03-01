@@ -1,13 +1,6 @@
 package security
 
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody
-import okhttp3.RequestBody.Companion.toRequestBody
-import okhttp3.Response
-import org.bouncycastle.crypto.params.X25519PrivateKeyParameters
-import org.bouncycastle.crypto.params.X25519PublicKeyParameters
+import security.crypto.generatePrekeys
 
 fun main() {
     /*
@@ -36,21 +29,21 @@ fun main() {
         (From Bob)
      */
 
-     uploadPreKeys(Bob.podId, Bob.preKeys!!.getPublic())
+     X3DH.uploadPreKeys(Bob.podId, Bob.preKeys!!.getPublic())
 
     /*
         STEP 2: Send the Initial Message
         (From Alice)
      */
 
-    Alice.sharedKey = sendInitialMessage(Alice, Bob.podId, Bob.preKeys!!.privateIdentityPreKey, Alice.preKeys!!)
+    Alice.sharedKey = X3DH.sendInitialMessage(Alice, Bob.podId, Bob.preKeys!!.privateIdentityPreKey, Alice.preKeys!!)
 
     /*
         STEP 3: Process the Initial Message
         (From Bob)
      */
 
-    Bob.sharedKey = processInitialMessage(Bob, Bob.podId, Bob.preKeys!!)
+    Bob.sharedKey = X3DH.processInitialMessage(Bob, Bob.podId, Bob.preKeys!!)
 
     val a = 2
 
@@ -85,7 +78,7 @@ fun main() {
 
 
     val messageA1Decrypt = Bob.receiveMessage(messageA1, messageA1.publicKey)
-    val string = String(messageA1Decrypt.cipherText, Charsets.UTF_8)
+    val string = messageA1Decrypt.plainText
 
     val b = 2
 
@@ -104,8 +97,8 @@ fun main() {
     val messageB1Decrypt = Alice.receiveMessage(messageB1, messageB1.publicKey)
     val messageB2Decrypt = Alice.receiveMessage(messageB2, messageB2.publicKey)
 
-    val string1 = String(messageB1Decrypt.cipherText, Charsets.UTF_8)
-    val string2 = String(messageB2Decrypt.cipherText, Charsets.UTF_8)
+    val string1 = messageB1Decrypt.plainText
+    val string2 = messageB2Decrypt.plainText
 
     val c = 2
 
@@ -115,7 +108,7 @@ fun main() {
 
     val messageA2 = Alice.sendMessage("testA2".toByteArray())
     val messageA2Decrypt = Bob.receiveMessage(messageA2, messageA2.publicKey)
-    val stringA2 = String(messageA2Decrypt.cipherText, Charsets.UTF_8)
+    val stringA2 = messageA2Decrypt.plainText
 
     /*
         Bob sends message B3 + B4 + B5
@@ -134,9 +127,9 @@ fun main() {
     val messageB5Decrypt = Alice.receiveMessage(messageB5, messageB5.publicKey)
 
 
-    val string3 = String(messageB3Decrypt.cipherText, Charsets.UTF_8)
-    val string4 = String(messageB4Decrypt.cipherText, Charsets.UTF_8)
-    val string5 = String(messageB5Decrypt.cipherText, Charsets.UTF_8)
+    val string3 = messageB3Decrypt.plainText
+    val string4 = messageB4Decrypt.plainText
+    val string5 = messageB5Decrypt.plainText
 
     val d = 2
 

@@ -1,4 +1,4 @@
-package security;
+package security.crypto;
 
 import org.bouncycastle.crypto.KeyGenerationParameters
 import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters
@@ -55,7 +55,9 @@ data class MontgomeryPoint(val u: BigInteger) {
         val denominatorInv = u.add(BigInteger.ONE).modInverse(Curve25519Constants.q)
 
         // divide by multiplying with the inverse
-        return u.minus(BigInteger.ONE).multiply(denominatorInv).mod(Curve25519Constants.q).modInverse(Curve25519Constants.q);
+        return u.minus(BigInteger.ONE).multiply(denominatorInv).mod(Curve25519Constants.q).modInverse(
+            Curve25519Constants.q
+        );
     }
 
     /*

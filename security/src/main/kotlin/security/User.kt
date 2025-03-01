@@ -1,11 +1,14 @@
 package security
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties
-import com.fasterxml.jackson.annotation.JsonProperty
 import org.bouncycastle.crypto.params.X25519PrivateKeyParameters
 import org.bouncycastle.crypto.params.X25519PublicKeyParameters
+import security.crypto.DiffieHellman
+import security.crypto.aesGcmDecrypt
+import security.crypto.aesGcmEncrypt
+import security.crypto.generateX25519KeyPair
+import security.messages.DecryptedMessage
+import security.messages.EncryptedMessage
 import security.messages.X3DHPreKeys
-import java.util.*
 
 class User(val podId: String) {
     var initialDHPublicKey: ByteArray? = null
@@ -27,14 +30,14 @@ class User(val podId: String) {
     var sentMessageId: Int = -1
     var receivedMessageId: Int = -1
 
-    fun sendInitialMessage(input: ByteArray): Message {
+    fun sendInitialMessage(input: ByteArray): EncryptedMessage {
         DHKeyPair = generateX25519KeyPair()
         val initialDHoutput = DiffieHellman(DHKeyPair!!.second, X25519PublicKeyParameters(initialDHPublicKey))
         sendingKey = KeyRatchet.SymmetricKeyRatchetRoot(this, initialDHoutput)
         return sendMessage(input)
     }
 
-    fun sendMessage(input: ByteArray): Message {
+    fun sendMessage(input: ByteArray): EncryptedMessage {
         val messageId = sentMessageId
         sentMessageId++
         /*
@@ -50,10 +53,10 @@ class User(val podId: String) {
 
         // encrypt message
         val ciphertext = aesGcmEncrypt(input, messageKey, associatedData)
-        return Message(messageId + 1, DHKeyPair!!.first.encoded, ciphertext!!, sequenceNumber, PN)
+        return EncryptedMessage(messageId + 1, DHKeyPair!!.first.encoded, ciphertext!!, sequenceNumber, PN)
     }
 
-    fun receiveMessage(message: Message, publicKey: ByteArray): Message {
+    fun receiveMessage(message: EncryptedMessage, publicKey: ByteArray): DecryptedMessage {
 
         // Check if messageKey was skipped preciously
         if (message.messageId  <= receivedMessageId) {
@@ -65,7 +68,7 @@ class User(val podId: String) {
 
             // decrypt message
             val plaintext = aesGcmDecrypt(message.cipherText, messageKey!!, associatedData)
-            return Message(message.messageId, publicKey, plaintext!!, message.N, message.PN)
+            return DecryptedMessage(message.messageId, publicKey, String(plaintext!!, Charsets.UTF_8))
         }
 
         /*
@@ -108,10 +111,10 @@ class User(val podId: String) {
 
         // decrypt message
         val plaintext = aesGcmDecrypt(message.cipherText, messageKey, associatedData)
-        return Message(message.messageId, publicKey, plaintext!!, message.N, message.PN)
+        return DecryptedMessage(message.messageId, publicKey, String(plaintext!!, Charsets.UTF_8))
     }
 
-    fun handleSkippedMessages(skippedMessages: Int) {
+    private fun handleSkippedMessages(skippedMessages: Int) {
         for (i in 1..skippedMessages) {
             val messageKey = KeyRatchet.SymmetricKeyRatchetNonRoot(this, false)
             skippedKeys.put(receivedMessageId + 1, messageKey)
@@ -119,14 +122,6 @@ class User(val podId: String) {
         }
     }
 }
-
-data class Message(
-    val messageId: Int,
-    val publicKey: ByteArray,
-    val cipherText: ByteArray,
-    val N: Int,
-    val PN: Int
-)
 
 
 

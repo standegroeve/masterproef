@@ -1,4 +1,4 @@
-package security
+package security.crypto
 
 import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters
 import org.bouncycastle.crypto.params.X25519PrivateKeyParameters

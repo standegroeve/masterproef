@@ -1,6 +1,9 @@
 package security
 
 import org.bouncycastle.crypto.params.X25519PublicKeyParameters
+import security.crypto.DiffieHellman
+import security.crypto.HKDF
+import security.crypto.generateX25519KeyPair
 
 object KeyRatchet  {
     fun DiffieHellmanRatchet(user: User, publicKey: ByteArray): Pair<ByteArray, ByteArray>? {

@@ -1,4 +1,4 @@
-package security
+package security.crypto
 
 import org.bouncycastle.crypto.digests.SHA256Digest
 import org.bouncycastle.crypto.generators.HKDFBytesGenerator

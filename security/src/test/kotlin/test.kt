@@ -1,9 +1,29 @@
 import org.junit.jupiter.api.Test
 import security.*
-import java.math.BigInteger
+import security.crypto.generatePrekeys
 
 
 class securityTests() {
+
+    @Test
+    fun X3DHTest() {
+        // STEP 0: Generate Prekeys
+        val Alice = User("alice")
+        val Bob = User("bob")
+        Alice.preKeys = generatePrekeys()
+        Bob.preKeys = generatePrekeys()
+
+        // STEP 1: Place Keys on Server (From Bob)
+        X3DH.uploadPreKeys(Bob.podId, Bob.preKeys!!.getPublic())
+
+        // STEP 2: Send the Initial Message (From Alice)
+        Alice.sharedKey = X3DH.sendInitialMessage(Alice, Bob.podId, Bob.preKeys!!.privateIdentityPreKey, Alice.preKeys!!)
+
+        // STEP 3: Process the Initial Message (From Bob)
+        Bob.sharedKey = X3DH.processInitialMessage(Bob, Bob.podId, Bob.preKeys!!)
+
+        assert(Alice.sharedKey.contentEquals(Bob.sharedKey))
+    }
 
     @Test
     fun outOfOrderMessagesTest() {
@@ -12,9 +32,9 @@ class securityTests() {
         Alice.preKeys = generatePrekeys()
         Bob.preKeys = generatePrekeys()
         /* START X3DH */
-        uploadPreKeys(Bob.podId, Bob.preKeys!!.getPublic())
-        Alice.sharedKey = sendInitialMessage(Alice, Bob.podId, Bob.preKeys!!.privateIdentityPreKey, Alice.preKeys!!)
-        Bob.sharedKey = processInitialMessage(Bob, Bob.podId, Bob.preKeys!!)
+        X3DH.uploadPreKeys(Bob.podId, Bob.preKeys!!.getPublic())
+        Alice.sharedKey = X3DH.sendInitialMessage(Alice, Bob.podId, Bob.preKeys!!.privateIdentityPreKey, Alice.preKeys!!)
+        Bob.sharedKey = X3DH.processInitialMessage(Bob, Bob.podId, Bob.preKeys!!)
         /* X3DH FINISHED - START DOUBLE RATCHET ALGORITHM */
 
         /*
@@ -75,15 +95,15 @@ class securityTests() {
         assert(Alice.skippedKeys.isEmpty())
         assert(Bob.skippedKeys.isEmpty())
 
-        assert("messageA1" == String(decryptA1.cipherText, Charsets.UTF_8))
-        assert("messageA2" == String(decryptA2.cipherText, Charsets.UTF_8))
-        assert("messageB1" == String(decryptB1.cipherText, Charsets.UTF_8))
-        assert("messageB2" == String(decryptB2.cipherText, Charsets.UTF_8))
-        assert("messageB3" == String(decryptB3.cipherText, Charsets.UTF_8))
-        assert("messageB4" == String(decryptB4.cipherText, Charsets.UTF_8))
+        assert("messageA1" == decryptA1.plainText)
+        assert("messageA2" == decryptA2.plainText)
+        assert("messageB1" == decryptB1.plainText)
+        assert("messageB2" == decryptB2.plainText)
+        assert("messageB3" == decryptB3.plainText)
+        assert("messageB4" == decryptB4.plainText)
 
-        assert("messageA3" == String(decryptA3.cipherText, Charsets.UTF_8))
-        assert("messageB5" == String(decryptB5.cipherText, Charsets.UTF_8))
+        assert("messageA3" == decryptA3.plainText)
+        assert("messageB5" == decryptB5.plainText)
 
 
 
