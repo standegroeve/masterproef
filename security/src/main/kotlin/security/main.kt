@@ -109,4 +109,35 @@ fun main() {
 
     val c = 2
 
+    /*
+        Alice sends A2
+     */
+
+    val messageA2 = Alice.sendMessage("testA2".toByteArray())
+    val messageA2Decrypt = Bob.receiveMessage(messageA2, messageA2.publicKey)
+    val stringA2 = String(messageA2Decrypt.cipherText, Charsets.UTF_8)
+
+    /*
+        Bob sends message B3 + B4 + B5
+     */
+
+    // Bob creates and sends messages
+
+    val messageB3 = Bob.sendMessage("test3".toByteArray())
+    val messageB4 = Bob.sendMessage("test4".toByteArray())
+    val messageB5 = Bob.sendMessage("test5".toByteArray())
+
+    // Alice receives message
+
+    val messageB3Decrypt = Alice.receiveMessage(messageB3, messageB3.publicKey)
+    val messageB4Decrypt = Alice.receiveMessage(messageB4, messageB4.publicKey)
+    val messageB5Decrypt = Alice.receiveMessage(messageB5, messageB5.publicKey)
+
+
+    val string3 = String(messageB3Decrypt.cipherText, Charsets.UTF_8)
+    val string4 = String(messageB4Decrypt.cipherText, Charsets.UTF_8)
+    val string5 = String(messageB5Decrypt.cipherText, Charsets.UTF_8)
+
+    val d = 2
+
 }

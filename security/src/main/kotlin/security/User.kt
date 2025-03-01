@@ -8,8 +8,10 @@ import security.messages.X3DHPreKeys
 import java.util.*
 
 class User(val podId: String) {
+    var initialDHPublicKey: ByteArray? = null
     var targetPublicKey: ByteArray? = null
     var preKeys: X3DHPreKeys? = null
+
     var sharedKey: ByteArray? = null // chain key
     var sendingKey: ByteArray? = null // sending chain key
     var receivingKey: ByteArray? = null // receiving chain key
@@ -17,88 +19,113 @@ class User(val podId: String) {
     var prevPublicKey: ByteArray? = null
     var DHKeyPair: Pair<X25519PublicKeyParameters, X25519PrivateKeyParameters>? = null
 
-
-    fun DiffieHellmanRatchet(publicKey: ByteArray): Pair<ByteArray, ByteArray>? {
-        if (publicKey.contentEquals(prevPublicKey)) {
-            return null
-        }
-
-        val DH1 = DiffieHellman(DHKeyPair!!.second, X25519PublicKeyParameters(publicKey,0))
-        DHKeyPair = generateX25519KeyPair()
-        val DH2 =  DiffieHellman(DHKeyPair!!.second, X25519PublicKeyParameters(publicKey,0))
-        prevPublicKey = publicKey
-        // return previous and current DH output
-        return Pair(DH1, DH2)
-    }
-
-    fun SymmetricKeyRatchetRoot(inputKeyingMaterial: ByteArray): ByteArray {
-        val prk: ByteArray = HKDF(salt = sharedKey!!, inputKeyingMaterial = inputKeyingMaterial, info = "prk".toByteArray(), outputLength = 32)
-        val newChainKey: ByteArray = HKDF(salt = prk, inputKeyingMaterial = ByteArray(0), info = "chain".toByteArray(), outputLength = 32)
-        val messageKey: ByteArray = HKDF(salt = prk, inputKeyingMaterial = ByteArray(0), info = "message".toByteArray(), outputLength = 32)
-        sharedKey = newChainKey
-        return messageKey
-    }
-
-    fun SymmetricKeyRatchetNonRoot(sendingRatchet: Boolean): ByteArray {
-        val chainKey = if (sendingRatchet) sendingKey else receivingKey
-
-        val prk: ByteArray = HKDF(salt = chainKey!!, inputKeyingMaterial = ByteArray(0), info = "prk".toByteArray(), outputLength = 32)
-        val newChainKey: ByteArray = HKDF(salt = prk, inputKeyingMaterial = ByteArray(0), info = "chain".toByteArray(), outputLength = 32)
-        val messageKey: ByteArray = HKDF(salt = prk, inputKeyingMaterial = ByteArray(0), info = "message".toByteArray(), outputLength = 32)
-
-        if (sendingRatchet)
-            sendingKey = newChainKey
-        else
-            receivingKey = newChainKey
-        return messageKey
-    }
+    // Out-of-order message handling
+    var skippedKeys = mutableMapOf<Int, ByteArray>()
+    var sendingChainLength: Int = 0
+    var receivingChainLength: Int = 0
+    var PN: Int = 0
+    var sentMessageId: Int = -1
+    var receivedMessageId: Int = -1
 
     fun sendInitialMessage(input: ByteArray): Message {
         DHKeyPair = generateX25519KeyPair()
-        val initialDHoutput = DiffieHellman(DHKeyPair!!.second, X25519PublicKeyParameters(targetPublicKey))
-        sendingKey = SymmetricKeyRatchetRoot(initialDHoutput)
+        val initialDHoutput = DiffieHellman(DHKeyPair!!.second, X25519PublicKeyParameters(initialDHPublicKey))
+        sendingKey = KeyRatchet.SymmetricKeyRatchetRoot(this, initialDHoutput)
         return sendMessage(input)
     }
 
     fun sendMessage(input: ByteArray): Message {
+        val messageId = sentMessageId
+        sentMessageId++
         /*
             TODO: Send message to message system
          */
-//        if (!publicKey.contentEquals(prevPublicKey)) {
-//            // Does a DH ratchet when we receive a new public key
-//            val dhOutputs = DiffieHellmanRatchet(publicKey)
-//            receivingKey = SymmetricKeyRatchetRoot(dhOutputs!!.first)
-//            sendingKey = SymmetricKeyRatchetRoot(dhOutputs.second)
-//        }
+        val sequenceNumber = sendingChainLength
+
         // generates the new sendingKey
-        val messageKey = SymmetricKeyRatchetNonRoot(true)
+        val messageKey = KeyRatchet.SymmetricKeyRatchetNonRoot(this, true)
+
+        // associatedData = Ephemeral publicKey + public id key Alice + public id Key bob
+        val associatedData = DHKeyPair!!.first.encoded + preKeys!!.publicIdentityPreKey.encoded + targetPublicKey!!
+
         // encrypt message
-        val ciphertext = aesGcmEncrypt(input, messageKey, DHKeyPair!!.first.encoded)
-        return Message(DHKeyPair!!.first.encoded, ciphertext!!)
+        val ciphertext = aesGcmEncrypt(input, messageKey, associatedData)
+        return Message(messageId + 1, DHKeyPair!!.first.encoded, ciphertext!!, sequenceNumber, PN)
     }
 
     fun receiveMessage(message: Message, publicKey: ByteArray): Message {
+
+        // Check if messageKey was skipped preciously
+        if (message.messageId  <= receivedMessageId) {
+            // get earlier determined messageKey and remove it from the map
+            val messageKey = skippedKeys.get(message.messageId)
+            skippedKeys.remove(message.messageId)
+
+            val associatedData = publicKey + targetPublicKey!! + preKeys!!.publicIdentityPreKey.encoded
+
+            // decrypt message
+            val plaintext = aesGcmDecrypt(message.cipherText, messageKey!!, associatedData)
+            return Message(message.messageId, publicKey, plaintext!!, message.N, message.PN)
+        }
+
         /*
             TODO: Fetch message from message system
          */
-
         if (!publicKey.contentEquals(prevPublicKey)) {
+            // handle skipped messages in the previous chain
+            val skippedMessages = (message.PN - receivingChainLength).takeIf { message.PN > receivingChainLength } ?: 0
+            if (message.PN > receivingChainLength) {
+                handleSkippedMessages(skippedMessages)
+            }
+
+            PN = sendingChainLength + skippedMessages
+
             // Does a DH ratchet when we receive a new public key
-            val dhOutputs = DiffieHellmanRatchet(publicKey)
-            receivingKey = SymmetricKeyRatchetRoot(dhOutputs!!.first)
-            sendingKey = SymmetricKeyRatchetRoot(dhOutputs.second)
+            val dhOutputs = KeyRatchet.DiffieHellmanRatchet(this, publicKey)
+            receivingKey = KeyRatchet.SymmetricKeyRatchetRoot(this, dhOutputs!!.first)
+            sendingKey = KeyRatchet.SymmetricKeyRatchetRoot(this, dhOutputs.second)
+
+
+            // handle skipped messages in the current chain
+            if (message.N > 0) {
+                handleSkippedMessages(message.N)
+                receivingChainLength = message.N
+            }
+            sendingChainLength = 0
         }
+        else {
+            // handle skipped messages
+            if (message.N > receivingChainLength) {
+                handleSkippedMessages(message.N - receivingChainLength)
+            }
+        }
+        receivedMessageId++
         // generates the new receivingKey
-        val messageKey = SymmetricKeyRatchetNonRoot(false)
+        val messageKey = KeyRatchet.SymmetricKeyRatchetNonRoot(this, false)
+
+        // associatedData = Ephemeral publicKey + public id key Alice + public id Key bob
+        val associatedData = publicKey + targetPublicKey!! + preKeys!!.publicIdentityPreKey.encoded
+
         // decrypt message
-        val plaintext = aesGcmDecrypt(message.cipherText, messageKey, publicKey)
-        return Message(publicKey, plaintext!!)
+        val plaintext = aesGcmDecrypt(message.cipherText, messageKey, associatedData)
+        return Message(message.messageId, publicKey, plaintext!!, message.N, message.PN)
+    }
+
+    fun handleSkippedMessages(skippedMessages: Int) {
+        for (i in 1..skippedMessages) {
+            val messageKey = KeyRatchet.SymmetricKeyRatchetNonRoot(this, false)
+            skippedKeys.put(receivedMessageId + 1, messageKey)
+            receivedMessageId++
+        }
     }
 }
 
 data class Message(
+    val messageId: Int,
     val publicKey: ByteArray,
-    val cipherText: ByteArray
+    val cipherText: ByteArray,
+    val N: Int,
+    val PN: Int
 )
 
 

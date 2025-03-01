@@ -77,14 +77,13 @@ fun getPublicX3DHKeys(podId: String): X3DHPublicPreKeys {
 fun sendInitialMessage(actor: User, podId:String, privateKeyToCheat: X25519PrivateKeyParameters, preKeys: X3DHPreKeys): ByteArray {
     val targetPrekeys: X3DHPublicPreKeys = getPublicX3DHKeys(podId)
 
-    actor.targetPublicKey = targetPrekeys.publicSignedPrekey.encoded
+    actor.initialDHPublicKey = targetPrekeys.publicSignedPrekey.encoded
+    actor.targetPublicKey = targetPrekeys.publicIdentityPreKey.encoded
     actor.DHKeyPair = generateX25519KeyPair()
     /*
         Verifiy signature
      */
     val verified = xeddsa_verify(targetPrekeys.publicIdentityPreKey, privateKeyToCheat, targetPrekeys.publicSignedPrekey.encoded, targetPrekeys.preKeySignature)
-
-    println(verified)
 
     if (!verified) {
         throw RuntimeException("Signature Verification failed")
@@ -154,6 +153,8 @@ fun processInitialMessage(actor: User, podId: String, preKeys: X3DHPreKeys): Byt
     actor.DHKeyPair = Pair(actor.preKeys!!.publicSignedPrekey, actor.preKeys!!.privateSignedPrekey)
 
     val initieelBericht: Bericht = initieelBericht.toX25519()
+
+    actor.targetPublicKey = initieelBericht.identityPreKey.encoded
 
     /*
         Calculate sharedKey
