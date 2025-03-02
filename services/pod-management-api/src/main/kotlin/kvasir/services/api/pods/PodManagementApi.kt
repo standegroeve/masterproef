@@ -28,7 +28,6 @@ import org.eclipse.microprofile.reactive.messaging.Channel
 class PodManagementApi(
     private val podStore: PodStore,
     private val minioClient: MinioAsyncClient,
-    @Channel(Channels.POD_EVENT_PUBLISH) private val podEventEmitter: MutinyEmitter<PodEvent>,
     private val uriInfo: UriInfo
 ) {
 
@@ -60,7 +59,6 @@ class PodManagementApi(
                             )
                         }
                     }
-                    .chain { _ -> podEventEmitter.send(PodEvent(PodEventType.CREATED, input.name)) }
                     .map { Response.created(uriInfo.absolutePathBuilder.path(input.name).build()).build() }
             }
         }
@@ -109,7 +107,6 @@ class PodManagementApi(
                 Uni.createFrom().item(Response.status(Response.Status.NOT_FOUND).build())
             } else {
                 podStore.persist(existingPod.copy(configuration = input.configuration))
-                    .chain { _ -> podEventEmitter.send(PodEvent(PodEventType.UPDATED, podId)) }
                     .map { Response.noContent().build() }
             }
         }
@@ -126,7 +123,6 @@ class PodManagementApi(
                 Uni.createFrom().item(Response.status(Response.Status.NOT_FOUND).build())
             } else {
                 podStore.persist(existingPod.copy(x3dhKeys = input))
-                    .chain { _ -> podEventEmitter.send(PodEvent(PodEventType.UPDATED, podId)) }
                     .map { Response.noContent().build() }
             }
         }
@@ -152,7 +148,6 @@ class PodManagementApi(
     fun delete(@PathParam("podId") podId: String): Uni<Response> {
         val podId = uriInfo.absolutePath.toString()
         return podStore.deleteById(podId)
-            .chain { _ -> podEventEmitter.send(PodEvent(PodEventType.DELETED, podId)) }
             .map { Response.noContent().build() }
     }
 
