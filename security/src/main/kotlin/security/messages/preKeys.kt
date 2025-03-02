@@ -26,8 +26,8 @@ data class X3DHPreKeys(
 data class X3DHPublicPreKeys(
     val publicIdentityPreKeyEd25519: Ed25519PublicKeyParameters,
     val publicIdentityPreKeyX25519: X25519PublicKeyParameters,
-    val publicSignedPrekey: X25519PublicKeyParameters,
-    val publicOneTimePrekeys: List<X25519PublicKeyParameters>?,
+    val publicSignedPreKey: X25519PublicKeyParameters,
+    val publicOneTimePreKeys: List<X25519PublicKeyParameters>?,
     val preKeySignature: ByteArray
 )
 
@@ -35,16 +35,16 @@ data class X3DHPublicPreKeys(
 data class X3DHPublicKeysAsString(
     @JsonProperty("kss:publicIdentityPreKeyEd25519") val publicIdentityPreKeyEd25519: String,
     @JsonProperty("kss:publicIdentityPreKeyX25519") val publicIdentityPreKeyX25519: String,
-    @JsonProperty("kss:publicSignedPrekey") val publicSignedPrekey: String,
-    @JsonProperty("kss:publicOneTimePrekeys") val publicOneTimePrekeys: List<String>,
+    @JsonProperty("kss:publicSignedPreKey") val publicSignedPreKey: String,
+    @JsonProperty("kss:publicOneTimePreKeys") val publicOneTimePreKeys: List<String>,
     @JsonProperty("kss:preKeySignature") val preKeySignature: String
 ) {
     fun convertToX25519(): X3DHPublicPreKeys {
         return X3DHPublicPreKeys(
             publicIdentityPreKeyEd25519 = Ed25519PublicKeyParameters(Base64.getDecoder().decode(publicIdentityPreKeyEd25519)),
             publicIdentityPreKeyX25519 = X25519PublicKeyParameters(Base64.getDecoder().decode(publicIdentityPreKeyX25519)),
-            publicSignedPrekey = X25519PublicKeyParameters(Base64.getDecoder().decode(publicSignedPrekey)),
-            publicOneTimePrekeys = publicOneTimePrekeys.map { X25519PublicKeyParameters(Base64.getDecoder().decode(it)) },
+            publicSignedPreKey = X25519PublicKeyParameters(Base64.getDecoder().decode(publicSignedPreKey)),
+            publicOneTimePreKeys = publicOneTimePreKeys.map { X25519PublicKeyParameters(Base64.getDecoder().decode(it)) },
             preKeySignature = Base64.getDecoder().decode(preKeySignature)
         )
     }

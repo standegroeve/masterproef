@@ -45,8 +45,8 @@ object KvasirVocab {
     const val x3dhKeys = "${baseUri}x3dhKeys"
     const val publicIdentityPreKeyEd25519 = "${baseUri}publicIdentityPreKeyEd25519"
     const val publicIdentityPreKeyX25519 = "${baseUri}publicIdentityPreKeyX25519"
-    const val publicSignedPrekey = "${baseUri}publicSignedPrekey"
-    const val publicOneTimePrekeys = "${baseUri}publicOneTimePrekeys"
+    const val publicSignedPreKey = "${baseUri}publicSignedPreKey"
+    const val publicOneTimePreKeys = "${baseUri}publicOneTimePreKeys"
     const val preKeySignature = "${baseUri}preKeySignature"
 }
 

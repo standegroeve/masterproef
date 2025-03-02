@@ -191,9 +191,9 @@ data class PublicX3DHKeys(
     val publicIdentityPreKeyEd25519: String,
     @JsonProperty(KvasirVocab.publicIdentityPreKeyX25519)
     val publicIdentityPreKeyX25519: String,
-    @JsonProperty(KvasirVocab.publicSignedPrekey)
+    @JsonProperty(KvasirVocab.publicSignedPreKey)
     val publicSignedPrekey: String,
-    @JsonProperty(KvasirVocab.publicOneTimePrekeys)
+    @JsonProperty(KvasirVocab.publicOneTimePreKeys)
     val publicOneTimePrekeys: List<String>,
     @JsonProperty(KvasirVocab.preKeySignature)
     val preKeySignature: String

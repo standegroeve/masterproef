@@ -23,9 +23,9 @@ object X3DH {
             },
             "kss:publicIdentityPreKeyEd25519": "${Base64.getEncoder().encodeToString(preKeys.publicIdentityPreKeyEd25519.encoded)}",
             "kss:publicIdentityPreKeyX25519": "${Base64.getEncoder().encodeToString(preKeys.publicIdentityPreKeyX25519.encoded)}",
-            "kss:publicSignedPrekey": "${Base64.getEncoder().encodeToString(preKeys.publicSignedPrekey.encoded)}",
-            "kss:publicOneTimePrekeys": [${
-            preKeys.publicOneTimePrekeys?.joinToString(", ") {
+            "kss:publicSignedPreKey": "${Base64.getEncoder().encodeToString(preKeys.publicSignedPreKey.encoded)}",
+            "kss:publicOneTimePreKeys": [${
+            preKeys.publicOneTimePreKeys?.joinToString(", ") {
                 "\"${
                     Base64.getEncoder().encodeToString(it.encoded)
                 }\""
@@ -79,7 +79,7 @@ object X3DH {
     ): ByteArray {
         val targetPrekeys: X3DHPublicPreKeys = getPublicX3DHKeys(podId)
 
-        actor.initialDHPublicKey = targetPrekeys.publicSignedPrekey.encoded
+        actor.initialDHPublicKey = targetPrekeys.publicSignedPreKey.encoded
         actor.targetPublicKey = targetPrekeys.publicIdentityPreKeyX25519.encoded
         actor.DHKeyPair = generateX25519KeyPair()
         /*
@@ -87,7 +87,7 @@ object X3DH {
      */
         val verified = xeddsa_verify(
             targetPrekeys.publicIdentityPreKeyEd25519,
-            targetPrekeys.publicSignedPrekey.encoded,
+            targetPrekeys.publicSignedPreKey.encoded,
             targetPrekeys.preKeySignature
         )
 
@@ -100,9 +100,9 @@ object X3DH {
      */
         val ephemeralKeyPair = generateX25519KeyPair()
 
-        val DH1 = DiffieHellman(preKeys.privateIdentityPreKey, targetPrekeys.publicSignedPrekey)
+        val DH1 = DiffieHellman(preKeys.privateIdentityPreKey, targetPrekeys.publicSignedPreKey)
         val DH2 = DiffieHellman(ephemeralKeyPair.second, X25519PublicKeyParameters(targetPrekeys.publicIdentityPreKeyX25519.encoded))
-        val DH3 = DiffieHellman(ephemeralKeyPair.second, targetPrekeys.publicSignedPrekey)
+        val DH3 = DiffieHellman(ephemeralKeyPair.second, targetPrekeys.publicSignedPreKey)
 
         val F = ByteArray(32) { 0xFF.toByte() }
         val salt = ByteArray(32) { 0x00.toByte() }
@@ -110,11 +110,11 @@ object X3DH {
 
         val oneTimeKeysUsed = mutableListOf<Int>()
         var sharedKey: ByteArray
-        if (targetPrekeys.publicOneTimePrekeys == null) {
+        if (targetPrekeys.publicOneTimePreKeys == null) {
             sharedKey = HKDF(salt, F + DH1 + DH2 + DH3, info, 32)
 
         } else {
-            val DH4 = DiffieHellman(ephemeralKeyPair.second, targetPrekeys.publicOneTimePrekeys.first())
+            val DH4 = DiffieHellman(ephemeralKeyPair.second, targetPrekeys.publicOneTimePreKeys.first())
             oneTimeKeysUsed.add(0)
             sharedKey = HKDF(salt, F + DH1 + DH2 + DH3 + DH4, info, 32)
         }
