@@ -3,6 +3,10 @@ package security
 import security.crypto.generatePrekeys
 
 fun main() {
+
+    // this is the pod where the messages will be send to
+    val targetPodId = "bob"
+
     /*
 
 
@@ -29,21 +33,21 @@ fun main() {
         (From Bob)
      */
 
-     X3DH.uploadPreKeys(Bob.podId, Bob.preKeys!!.getPublic())
+     X3DH.uploadPreKeys(targetPodId, Bob.preKeys!!.getPublic())
 
     /*
         STEP 2: Send the Initial Message
         (From Alice)
      */
 
-    Alice.sharedKey = X3DH.sendInitialMessage(Alice, Bob.podId, Alice.preKeys!!)
+    Alice.sharedKey = X3DH.sendInitialMessage(Alice, targetPodId, Alice.preKeys!!)
 
     /*
         STEP 3: Process the Initial Message
         (From Bob)
      */
 
-    Bob.sharedKey = X3DH.processInitialMessage(Bob, Bob.podId, Bob.preKeys!!)
+    Bob.sharedKey = X3DH.processInitialMessage(Bob, targetPodId, Bob.preKeys!!)
 
     val a = 2
 
@@ -70,15 +74,15 @@ fun main() {
         SITUATION 2: Alice sends message
      */
 
-    val messageA1 = Alice.sendInitialMessage("initialMessage".toByteArray())
+    Alice.sendInitialMessage(targetPodId, "initialMessage".toByteArray())
 
     /*
         SITUATION 3: Bob receives message
      */
 
 
-    val messageA1Decrypt = Bob.receiveMessage(messageA1, messageA1.publicKey)
-    val string = messageA1Decrypt.plainText
+    val messageA1Decrypt = Bob.receiveMessage(targetPodId)
+    val string = messageA1Decrypt[0].plainText
 
     val b = 2
 
@@ -89,16 +93,14 @@ fun main() {
 
     // Bob creates and sends messages
 
-    val messageB1 = Bob.sendMessage("test_sending_message".toByteArray())
-    val messageB2 = Bob.sendMessage("test2".toByteArray())
+    Bob.sendMessage(targetPodId, "test_sending_message".toByteArray())
+    Bob.sendMessage(targetPodId, "test2".toByteArray())
 
     // Alice receives message
 
-    val messageB1Decrypt = Alice.receiveMessage(messageB1, messageB1.publicKey)
-    val messageB2Decrypt = Alice.receiveMessage(messageB2, messageB2.publicKey)
+    val messageB12Decrypt = Alice.receiveMessage(targetPodId)
 
-    val string1 = messageB1Decrypt.plainText
-    val string2 = messageB2Decrypt.plainText
+
 
     val c = 2
 
@@ -106,9 +108,9 @@ fun main() {
         Alice sends A2
      */
 
-    val messageA2 = Alice.sendMessage("testA2".toByteArray())
-    val messageA2Decrypt = Bob.receiveMessage(messageA2, messageA2.publicKey)
-    val stringA2 = messageA2Decrypt.plainText
+    Alice.sendMessage(targetPodId, "testA2".toByteArray())
+    val messageA2Decrypt = Bob.receiveMessage(targetPodId)
+
 
     /*
         Bob sends message B3 + B4 + B5
@@ -116,20 +118,13 @@ fun main() {
 
     // Bob creates and sends messages
 
-    val messageB3 = Bob.sendMessage("test3".toByteArray())
-    val messageB4 = Bob.sendMessage("test4".toByteArray())
-    val messageB5 = Bob.sendMessage("test5".toByteArray())
+    Bob.sendMessage(targetPodId, "test3".toByteArray())
+    Bob.sendMessage(targetPodId, "test4".toByteArray())
+    Bob.sendMessage(targetPodId, "test5".toByteArray())
 
     // Alice receives message
 
-    val messageB3Decrypt = Alice.receiveMessage(messageB3, messageB3.publicKey)
-    val messageB4Decrypt = Alice.receiveMessage(messageB4, messageB4.publicKey)
-    val messageB5Decrypt = Alice.receiveMessage(messageB5, messageB5.publicKey)
-
-
-    val string3 = messageB3Decrypt.plainText
-    val string4 = messageB4Decrypt.plainText
-    val string5 = messageB5Decrypt.plainText
+    val messageB345Decrypt = Alice.receiveMessage(targetPodId)
 
     val d = 2
 

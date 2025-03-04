@@ -3,9 +3,14 @@ package kvasir.definitions.kg
 import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.annotation.JsonProperty
 import io.smallrye.mutiny.Uni
+import io.vertx.core.json.Json
 import io.vertx.core.json.JsonObject
+import jakarta.ws.rs.NotFoundException
 import kvasir.definitions.rdf.JsonLdKeywords
 import kvasir.definitions.rdf.KvasirVocab
+import kvasir.definitions.security.EncryptedMessage
+import kvasir.definitions.security.MessagesLists
+import kvasir.definitions.security.PublicX3DHKeys
 
 interface PodStore {
 
@@ -53,6 +58,29 @@ data class Pod(
         return configuration[KvasirVocab.authConfiguration]?.let {
                 JsonObject(it as Map<String, Any>).mapTo(AuthConfiguration::class.java)
         }
+    }
+
+    @JsonIgnore
+    fun getPreKeys(): PublicX3DHKeys? {
+        val keys = x3dhKeys?.get(KvasirVocab.publicX3DHKeys)
+            ?: throw NotFoundException("X3DH keys not found")
+        return JsonObject(keys as Map<String, Any>).mapTo(PublicX3DHKeys::class.java)
+    }
+
+    @JsonIgnore
+    fun getNewMessages(): MessagesLists {
+        val inBoxMessages = x3dhKeys?.get(KvasirVocab.messageInbox) as? List<*>
+        val outBoxMessages = x3dhKeys?.get(KvasirVocab.messageOutbox) as? List<*>
+        if (inBoxMessages == null && outBoxMessages == null)
+            throw NotFoundException("No new messages")
+        return MessagesLists(
+            (inBoxMessages ?: emptyList<EncryptedMessage>()).map {
+                JsonObject(it as Map<String, Any>).mapTo(EncryptedMessage::class.java)
+            },
+            (outBoxMessages ?: emptyList<EncryptedMessage>()).map {
+                JsonObject(it as Map<String, Any>).mapTo(EncryptedMessage::class.java)
+            }
+        )
     }
 
 }

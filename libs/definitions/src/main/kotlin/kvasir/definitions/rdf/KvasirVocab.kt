@@ -1,5 +1,6 @@
 package kvasir.definitions.rdf
 
+import com.fasterxml.jackson.annotation.JsonProperty
 import kvasir.definitions.rdf.KvasirVocab.baseUri
 
 object KvasirVocab {
@@ -45,11 +46,21 @@ object KvasirVocab {
     const val authServerUrl = "${baseUri}authServerUrl"
     const val supportsChanges = "${baseUri}supportChanges"
     const val x3dhKeys = "${baseUri}x3dhKeys"
+    const val publicX3DHKeys = "${baseUri}publicX3DHKeys"
     const val publicIdentityPreKeyEd25519 = "${baseUri}publicIdentityPreKeyEd25519"
     const val publicIdentityPreKeyX25519 = "${baseUri}publicIdentityPreKeyX25519"
     const val publicSignedPreKey = "${baseUri}publicSignedPreKey"
     const val publicOneTimePreKeys = "${baseUri}publicOneTimePreKeys"
     const val preKeySignature = "${baseUri}preKeySignature"
+    const val messageInboxList = "${baseUri}messageInboxList"
+    const val messageOutboxList = "${baseUri}messageOutboxList"
+    const val messageInbox = "${baseUri}messageInbox"
+    const val messageOutbox = "${baseUri}messageOutbox"
+    const val messageId = "${baseUri}messageId"
+    const val publicKey = "${baseUri}publicKey"
+    const val cipherText = "${baseUri}cipherText"
+    const val sequenceNumber = "${baseUri}sequenceNumber"
+    const val prevSequenceNumber = "${baseUri}prevSequenceNumber"
 }
 
 object KvasirNamedGraphs {

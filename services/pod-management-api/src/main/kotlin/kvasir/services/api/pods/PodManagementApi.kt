@@ -19,6 +19,9 @@ import kvasir.definitions.openapi.ApiDocTags
 import kvasir.definitions.rdf.JSON_LD_MEDIA_TYPE
 import kvasir.definitions.rdf.JsonLdKeywords
 import kvasir.definitions.rdf.KvasirVocab
+import kvasir.definitions.security.EncryptedMessage
+import kvasir.definitions.security.MessagesLists
+import kvasir.definitions.security.PublicX3DHKeys
 import kvasir.utils.s3.S3Utils
 import org.eclipse.microprofile.openapi.annotations.tags.Tag
 import org.eclipse.microprofile.reactive.messaging.Channel
@@ -122,7 +125,7 @@ class PodManagementApi(
             if (existingPod == null) {
                 Uni.createFrom().item(Response.status(Response.Status.NOT_FOUND).build())
             } else {
-                podStore.persist(existingPod.copy(x3dhKeys = input))
+                podStore.persist(existingPod.copy(x3dhKeys = mapOf(KvasirVocab.publicX3DHKeys to input)))
                     .map { Response.noContent().build() }
             }
         }
@@ -137,9 +140,44 @@ class PodManagementApi(
         return podStore.getById(podId)
             .onItem().ifNull().failWith(NotFoundException("Pod not found"))
             .onItem().ifNotNull().transform { pod ->
-                pod?.x3dhKeys?.let {
-                    JsonObject(it).mapTo(PublicX3DHKeys::class.java)
-                } ?: throw NotFoundException("X3DH keys not found for pod: $podId")
+                pod?.getPreKeys()
+            }
+    }
+
+    @PermitAll
+    @PUT
+    @Consumes(JSON_LD_MEDIA_TYPE)
+    @Path("{podId}/messages")
+    fun newMessage(@PathParam("podId") podId: String, @QueryParam("senderPodId") senderPodId: String,  input: EncryptedMessage): Uni<Response> {
+        val podId = uriInfo.absolutePath.toString().substringBeforeLast("/messages")
+        return podStore.getById(podId).chain { existingPod ->
+            if (existingPod == null) {
+                Uni.createFrom().item(Response.status(Response.Status.NOT_FOUND).build())
+            } else {
+                val key = if("http://localhost:8080/$senderPodId" == podId) KvasirVocab.messageOutbox else KvasirVocab.messageInbox
+                val x3dhKeys = existingPod.x3dhKeys
+                    ?: throw NotFoundException("No x3dh keys were defined")
+                val updatedMessages: List<EncryptedMessage> = (x3dhKeys[key] as? List<EncryptedMessage>)
+                    ?.toMutableList()
+                    ?.apply { add(input) }
+                    ?: listOf(input)
+                val updatedX3dhKeys = x3dhKeys.toMutableMap().apply { put(key, updatedMessages) }
+                podStore.persist(existingPod.copy(x3dhKeys = updatedX3dhKeys))
+                    .map { Response.noContent().build() }
+            }
+        }
+    }
+
+    @PermitAll
+    @GET
+    @Produces(JSON_LD_MEDIA_TYPE)
+    @Path("{podId}/messages")
+    fun getNewMessages(@PathParam("podId") podId:String): Uni<MessagesLists> {
+        val podId = uriInfo.absolutePath.toString().substringBeforeLast("/messages")
+        return podStore.getById(podId)
+            .onItem().ifNull().failWith(NotFoundException("Pod not found"))
+            .onItem().ifNotNull().transform { pod ->
+                pod?.getNewMessages()
             }
     }
 
@@ -179,17 +217,4 @@ data class PodPublicProfile(
     val authServerUri: String,
     @JsonProperty(KvasirVocab.x3dhKeys)
     val x3dhKeys: String?
-)
-
-data class PublicX3DHKeys(
-    @JsonProperty(KvasirVocab.publicIdentityPreKeyEd25519)
-    val publicIdentityPreKeyEd25519: String,
-    @JsonProperty(KvasirVocab.publicIdentityPreKeyX25519)
-    val publicIdentityPreKeyX25519: String,
-    @JsonProperty(KvasirVocab.publicSignedPreKey)
-    val publicSignedPrekey: String,
-    @JsonProperty(KvasirVocab.publicOneTimePreKeys)
-    val publicOneTimePrekeys: List<String>,
-    @JsonProperty(KvasirVocab.preKeySignature)
-    val preKeySignature: String
 )

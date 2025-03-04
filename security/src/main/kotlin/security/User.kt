@@ -30,19 +30,19 @@ class User(val podId: String) {
     var sentMessageId: Int = -1
     var receivedMessageId: Int = -1
 
-    fun sendInitialMessage(input: ByteArray): EncryptedMessage {
+    var latestReceivedMessageId = -1
+
+    fun sendInitialMessage(targetPod: String, input: ByteArray) {
         DHKeyPair = generateX25519KeyPair()
         val initialDHoutput = DiffieHellman(DHKeyPair!!.second, X25519PublicKeyParameters(initialDHPublicKey))
         sendingKey = KeyRatchet.SymmetricKeyRatchetRoot(this, initialDHoutput)
-        return sendMessage(input)
+        sendMessage(targetPod, input)
     }
 
-    fun sendMessage(input: ByteArray): EncryptedMessage {
+    fun sendMessage(targetPod: String, input: ByteArray) {
         val messageId = sentMessageId
         sentMessageId++
-        /*
-            TODO: Send message to message system
-         */
+
         val sequenceNumber = sendingChainLength
 
         // generates the new sendingKey
@@ -53,65 +53,80 @@ class User(val podId: String) {
 
         // encrypt message
         val ciphertext = aesGcmEncrypt(input, messageKey, associatedData)
-        return EncryptedMessage(messageId + 1, DHKeyPair!!.first.encoded, ciphertext!!, sequenceNumber, PN)
+        val encrpytedMessage = EncryptedMessage(messageId + 1, DHKeyPair!!.first.encoded, ciphertext!!, sequenceNumber, PN)
+
+        // sends the message to the pod
+        messageController.sendMessage(podId, targetPod, encrpytedMessage)
     }
 
-    fun receiveMessage(message: EncryptedMessage, publicKey: ByteArray): DecryptedMessage {
+    fun receiveMessage(targetPod: String): List<DecryptedMessage> {
+        // Retreive messages which we havent seen already or whose key isnt in skippedKeys
+        val encryptedMessages = messageController.retrieveMessages(podId, targetPod, latestReceivedMessageId, skippedKeys)
 
-        // Check if messageKey was skipped preciously
-        if (message.messageId  <= receivedMessageId) {
-            // get earlier determined messageKey and remove it from the map
-            val messageKey = skippedKeys.get(message.messageId)
-            skippedKeys.remove(message.messageId)
+        var messagesList = mutableListOf<DecryptedMessage>()
+        for (i in 0..encryptedMessages.size-1) {
+            val message = encryptedMessages[i]
 
-            val associatedData = publicKey + targetPublicKey!! + preKeys!!.publicIdentityPreKey.encoded
+            if (message.messageId > latestReceivedMessageId)
+                latestReceivedMessageId = message.messageId
+
+            // Check if messageKey was skipped previously
+            if (message.messageId  <= receivedMessageId) {
+                // get earlier determined messageKey and remove it from the map
+                val messageKey = skippedKeys.get(message.messageId)
+                skippedKeys.remove(message.messageId)
+
+                val associatedData = message.publicKey + targetPublicKey!! + preKeys!!.publicIdentityPreKey.encoded
+
+                // decrypt message
+                val decryptedData = aesGcmDecrypt(message.cipherText, messageKey!!, associatedData)
+                messagesList.add(DecryptedMessage(message.messageId, message.publicKey, String(decryptedData!!, Charsets.UTF_8)))
+                continue
+            }
+
+
+            if (!message.publicKey.contentEquals(prevPublicKey)) {
+                // handle skipped messages in the previous chain
+                val skippedMessages = (message.PN - receivingChainLength).takeIf { message.PN > receivingChainLength } ?: 0
+                if (message.PN > receivingChainLength) {
+                    handleSkippedMessages(skippedMessages)
+                }
+
+                PN = sendingChainLength + skippedMessages
+
+                // Does a DH ratchet when we receive a new public key
+                val dhOutputs = KeyRatchet.DiffieHellmanRatchet(this, message.publicKey)
+                receivingKey = KeyRatchet.SymmetricKeyRatchetRoot(this, dhOutputs!!.first)
+                sendingKey = KeyRatchet.SymmetricKeyRatchetRoot(this, dhOutputs.second)
+
+
+                // handle skipped messages in the current chain
+                if (message.N > 0) {
+                    handleSkippedMessages(message.N)
+                    receivingChainLength = message.N
+                }
+                sendingChainLength = 0
+            }
+            else {
+                // handle skipped messages
+                if (message.N > receivingChainLength) {
+                    handleSkippedMessages(message.N - receivingChainLength)
+                }
+            }
+            receivedMessageId++
+            // generates the new receivingKey
+            val messageKey = KeyRatchet.SymmetricKeyRatchetNonRoot(this, false)
+
+            // associatedData = Ephemeral publicKey + public id key Alice + public id Key bob
+            val associatedData = message.publicKey + targetPublicKey!! + preKeys!!.publicIdentityPreKey.encoded
 
             // decrypt message
-            val plaintext = aesGcmDecrypt(message.cipherText, messageKey!!, associatedData)
-            return DecryptedMessage(message.messageId, publicKey, String(plaintext!!, Charsets.UTF_8))
+            val decryptedData = aesGcmDecrypt(message.cipherText, messageKey, associatedData)
+
+            messagesList.add(DecryptedMessage(message.messageId, message.publicKey, String(decryptedData!!, Charsets.UTF_8)))
         }
 
-        /*
-            TODO: Fetch message from message system
-         */
-        if (!publicKey.contentEquals(prevPublicKey)) {
-            // handle skipped messages in the previous chain
-            val skippedMessages = (message.PN - receivingChainLength).takeIf { message.PN > receivingChainLength } ?: 0
-            if (message.PN > receivingChainLength) {
-                handleSkippedMessages(skippedMessages)
-            }
-
-            PN = sendingChainLength + skippedMessages
-
-            // Does a DH ratchet when we receive a new public key
-            val dhOutputs = KeyRatchet.DiffieHellmanRatchet(this, publicKey)
-            receivingKey = KeyRatchet.SymmetricKeyRatchetRoot(this, dhOutputs!!.first)
-            sendingKey = KeyRatchet.SymmetricKeyRatchetRoot(this, dhOutputs.second)
-
-
-            // handle skipped messages in the current chain
-            if (message.N > 0) {
-                handleSkippedMessages(message.N)
-                receivingChainLength = message.N
-            }
-            sendingChainLength = 0
-        }
-        else {
-            // handle skipped messages
-            if (message.N > receivingChainLength) {
-                handleSkippedMessages(message.N - receivingChainLength)
-            }
-        }
-        receivedMessageId++
-        // generates the new receivingKey
-        val messageKey = KeyRatchet.SymmetricKeyRatchetNonRoot(this, false)
-
-        // associatedData = Ephemeral publicKey + public id key Alice + public id Key bob
-        val associatedData = publicKey + targetPublicKey!! + preKeys!!.publicIdentityPreKey.encoded
-
-        // decrypt message
-        val plaintext = aesGcmDecrypt(message.cipherText, messageKey, associatedData)
-        return DecryptedMessage(message.messageId, publicKey, String(plaintext!!, Charsets.UTF_8))
+        return messagesList
     }
 
     private fun handleSkippedMessages(skippedMessages: Int) {
