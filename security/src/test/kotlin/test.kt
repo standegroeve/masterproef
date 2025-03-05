@@ -1,6 +1,7 @@
 import org.junit.jupiter.api.Test
 import security.*
 import security.crypto.generatePrekeys
+import java.nio.ByteBuffer
 
 
 class securityTests() {
@@ -41,9 +42,10 @@ class securityTests() {
         /*
             Alice sends A1 to start and creates A2 (so Bob doesn't receive now)
          */
+        val timestamp = System.currentTimeMillis()
 
-        Alice.sendInitialMessage(targetPodId, "messageA1".toByteArray())
-        Alice.sendMessage(targetPodId, "messageA2".toByteArray())
+        Alice.sendInitialMessage(targetPodId, "messageA1".toByteArray(), ByteBuffer.allocate(8).putLong(timestamp).array())
+        Alice.sendMessage(targetPodId, "messageA2".toByteArray(), ByteBuffer.allocate(8).putLong(timestamp+1).array())
 
         val decryptA1 = Bob.receiveMessage(targetPodId)
 
@@ -51,10 +53,10 @@ class securityTests() {
             Bob creates B1,2,3,4 but only sends B1 + B4
          */
 
-        val messageB1 = Bob.sendMessage(targetPodId, "messageB1".toByteArray())
-        val messageB2 = Bob.sendMessage(targetPodId, "messageB2".toByteArray())
-        val messageB3 = Bob.sendMessage(targetPodId, "messageB3".toByteArray())
-        val messageB4 = Bob.sendMessage(targetPodId, "messageB4".toByteArray())
+        val messageB1 = Bob.sendMessage(targetPodId, "messageB1".toByteArray(), ByteBuffer.allocate(8).putLong(timestamp+2).array() )
+        val messageB2 = Bob.sendMessage(targetPodId, "messageB2".toByteArray(), ByteBuffer.allocate(8).putLong(timestamp+3).array())
+        val messageB3 = Bob.sendMessage(targetPodId, "messageB3".toByteArray(), ByteBuffer.allocate(8).putLong(timestamp+4).array())
+        val messageB4 = Bob.sendMessage(targetPodId, "messageB4".toByteArray(), ByteBuffer.allocate(8).putLong(timestamp+5).array())
 
         val decryptB1234 = Alice.receiveMessage(targetPodId)
 
@@ -62,14 +64,14 @@ class securityTests() {
             Alice creates and sends A3
          */
 
-        val messageA3 = Alice.sendMessage(targetPodId, "messageA3".toByteArray())
+        val messageA3 = Alice.sendMessage(targetPodId, "messageA3".toByteArray(), ByteBuffer.allocate(8).putLong(timestamp+6).array())
         val decryptA3 = Bob.receiveMessage(targetPodId)
 
         /*
             Bob creates and send B5
          */
 
-        val messageB5 = Bob.sendMessage(targetPodId, "messageB5".toByteArray())
+        val messageB5 = Bob.sendMessage(targetPodId, "messageB5".toByteArray(), ByteBuffer.allocate(8).putLong(timestamp+7).array())
         val decryptB5 = Alice.receiveMessage(targetPodId)
 
 
