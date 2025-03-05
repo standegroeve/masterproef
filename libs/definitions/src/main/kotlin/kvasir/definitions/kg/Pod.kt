@@ -9,6 +9,7 @@ import jakarta.ws.rs.NotFoundException
 import kvasir.definitions.rdf.JsonLdKeywords
 import kvasir.definitions.rdf.KvasirVocab
 import kvasir.definitions.security.EncryptedMessage
+import kvasir.definitions.security.InitialMessage
 import kvasir.definitions.security.MessagesLists
 import kvasir.definitions.security.PublicX3DHKeys
 
@@ -81,6 +82,13 @@ data class Pod(
                 JsonObject(it as Map<String, Any>).mapTo(EncryptedMessage::class.java)
             }
         )
+    }
+
+    @JsonIgnore
+    fun getInitialMessage(): InitialMessage? {
+        val message = x3dhKeys?.get(KvasirVocab.initialMessage)
+            ?: throw NotFoundException("InitialMessage not found")
+        return JsonObject(message as Map<String, Any>).mapTo(InitialMessage::class.java)
     }
 
 }

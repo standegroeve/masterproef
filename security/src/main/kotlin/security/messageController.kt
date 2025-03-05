@@ -13,10 +13,9 @@ import security.messages.X3DHPublicKeysAsString
 import java.util.*
 
 object messageController {
+    private val client = OkHttpClient()
 
     fun sendMessage(senderPodId: String, targetPodId: String, encryptedMessage: EncryptedMessage) {
-        val client = OkHttpClient()
-
         val jsonLd = """
             {
                 "@context": {
@@ -45,8 +44,6 @@ object messageController {
     }
 
     fun retrieveMessages(retrieverPodId: String, targetPodId: String, latestReceivedMessageId: Int, skippedKeys: Map<Int, ByteArray>): List<EncryptedMessage> {
-        val client = OkHttpClient()
-
         val requestGet = Request.Builder()
             .url("http://localhost:8080/${targetPodId}/messages")
             .get()

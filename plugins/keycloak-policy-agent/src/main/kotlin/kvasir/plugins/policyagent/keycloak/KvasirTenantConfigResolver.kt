@@ -80,6 +80,7 @@ class KvasirTenantPolicyConfigResolver() : TenantPolicyConfigResolver {
                     .paths("/$tenantId/.profile").enforcementMode(PolicyEnforcerConfig.EnforcementMode.DISABLED)
                     .paths("/$tenantId/x3dh").enforcementMode(PolicyEnforcerConfig.EnforcementMode.DISABLED)
                     .paths("/$tenantId/messages").enforcementMode(PolicyEnforcerConfig.EnforcementMode.DISABLED)
+                    .paths("/$tenantId/initialMessage").enforcementMode(PolicyEnforcerConfig.EnforcementMode.DISABLED)
                     .build()
             )
         }

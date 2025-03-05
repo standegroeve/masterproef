@@ -45,6 +45,7 @@ object KvasirVocab {
     const val profile = "${baseUri}profile"
     const val authServerUrl = "${baseUri}authServerUrl"
     const val supportsChanges = "${baseUri}supportChanges"
+    // X3DH preKeys
     const val x3dhKeys = "${baseUri}x3dhKeys"
     const val publicX3DHKeys = "${baseUri}publicX3DHKeys"
     const val publicIdentityPreKeyEd25519 = "${baseUri}publicIdentityPreKeyEd25519"
@@ -52,6 +53,13 @@ object KvasirVocab {
     const val publicSignedPreKey = "${baseUri}publicSignedPreKey"
     const val publicOneTimePreKeys = "${baseUri}publicOneTimePreKeys"
     const val preKeySignature = "${baseUri}preKeySignature"
+    // X3DH initial message
+    const val initialMessage = "${baseUri}initialMessage"
+    const val identityPreKey = "${baseUri}identityPreKey"
+    const val ephemeralPreKey = "${baseUri}ephemeralPreKey"
+    const val preKeyIdentifiers = "${baseUri}preKeyIdentifiers"
+    const val initialCiphertext = "${baseUri}initialCiphertext"
+    // Message handling
     const val messageInboxList = "${baseUri}messageInboxList"
     const val messageOutboxList = "${baseUri}messageOutboxList"
     const val messageInbox = "${baseUri}messageInbox"

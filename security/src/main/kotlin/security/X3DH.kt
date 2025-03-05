@@ -13,9 +13,9 @@ import security.messages.*
 
 
 object X3DH {
-    fun uploadPreKeys(podId: String, preKeys: X3DHPublicPreKeys) {
-        val client = OkHttpClient()
+    private val client = OkHttpClient()
 
+    fun uploadPreKeys(podId: String, preKeys: X3DHPublicPreKeys) {
         val jsonLd = """
         {
             "@context": {
@@ -52,8 +52,6 @@ object X3DH {
 
 
     fun getPublicX3DHKeys(podId: String): X3DHPublicPreKeys {
-        val client = OkHttpClient()
-
         val requestGet = Request.Builder()
             .url("http://localhost:8080/${podId}/x3dh")
             .get()
@@ -115,6 +113,7 @@ object X3DH {
 
         } else {
             val DH4 = DiffieHellman(ephemeralKeyPair.second, targetPrekeys.publicOneTimePreKeys.first())
+            oneTimeKeysUsed.add(-1)
             oneTimeKeysUsed.add(0)
             sharedKey = HKDF(salt, F + DH1 + DH2 + DH3 + DH4, info, 32)
         }
@@ -133,70 +132,113 @@ object X3DH {
 
         TODO Send the message, now its stored locally for testing
      */
-        initieelBericht = InitialMessageString(
-            identityPreKey = Base64.getEncoder().encodeToString(preKeys.publicIdentityPreKey.encoded),
-            ephemeralPreKey = Base64.getEncoder().encodeToString(ephemeralKeyPair.first.encoded),
+        sendInitialMessageToKvasir(podId, InitialMessage(
+            identityPreKey = preKeys.publicIdentityPreKey,
+            ephemeralPreKey = ephemeralKeyPair.first,
             preKeyIdentifiers = oneTimeKeysUsed,
-            ciphertext = Base64.getEncoder().encodeToString(ciphertext)
-        )
-
+            initialCiphertext = ciphertext!!
+        ))
 
         return sharedKey
     }
-
-    private var initieelBericht: InitialMessageString = InitialMessageString(
-        identityPreKey = "",
-        ephemeralPreKey = "",
-        preKeyIdentifiers = emptyList<Int>(),
-        ciphertext = ""
-    )
 
     fun processInitialMessage(actor: User, podId: String, preKeys: X3DHPreKeys): ByteArray {
         /*
         Fetch initial message
         TODO: Fetch the initial message now its stored locally
      */
+        val initialMessage = retrieveInitialMessageFromKvasir(podId)
 
         actor.DHKeyPair = Pair(actor.preKeys!!.publicSignedPrekey, actor.preKeys!!.privateSignedPrekey)
 
-        val initieelBericht: InitialMessage = initieelBericht.toX25519()
-
-        actor.targetPublicKey = initieelBericht.identityPreKey.encoded
+        actor.targetPublicKey = initialMessage.identityPreKey.encoded
 
         /*
         Calculate sharedKey
      */
 
-        val DH1 = DiffieHellman(preKeys.privateSignedPrekey, initieelBericht.identityPreKey)
-        val DH2 = DiffieHellman(preKeys.privateIdentityPreKey, initieelBericht.ephemeralPreKey)
-        val DH3 = DiffieHellman(preKeys.privateSignedPrekey, initieelBericht.ephemeralPreKey)
+        val DH1 = DiffieHellman(preKeys.privateSignedPrekey, initialMessage.identityPreKey)
+        val DH2 = DiffieHellman(preKeys.privateIdentityPreKey, initialMessage.ephemeralPreKey)
+        val DH3 = DiffieHellman(preKeys.privateSignedPrekey, initialMessage.ephemeralPreKey)
 
         val F = ByteArray(32) { 0xFF.toByte() }
         val salt = ByteArray(32) { 0x00.toByte() }
         val info = ByteArray(0)
 
         var sharedKey: ByteArray
-        if (initieelBericht.preKeyIdentifiers.isEmpty()) {
+        if (initialMessage.preKeyIdentifiers.isEmpty()) {
             sharedKey = HKDF(salt, F + DH1 + DH2 + DH3, info, 32)
 
         } else {
-            val DH4 = DiffieHellman(preKeys.privateOneTimePrekeys.first(), initieelBericht.ephemeralPreKey)
+            val DH4 = DiffieHellman(preKeys.privateOneTimePrekeys.first(), initialMessage.ephemeralPreKey)
             sharedKey = HKDF(salt, F + DH1 + DH2 + DH3 + DH4, info, 32)
         }
 
-        val associatedData: ByteArray = initieelBericht.identityPreKey.encoded + preKeys.publicIdentityPreKey.encoded
+        val associatedData: ByteArray = initialMessage.identityPreKey.encoded + preKeys.publicIdentityPreKey.encoded
 
-        val plaintext = aesGcmDecrypt(initieelBericht.ciphertext, sharedKey, associatedData)
+        val plaintext = aesGcmDecrypt(initialMessage.initialCiphertext, sharedKey, associatedData)
 
         if (plaintext != null) {
             actor.preKeys = actor.preKeys?.let {
                 preKeys.copy(
-                    publicOneTimePrekeys = it.publicOneTimePrekeys.filterIndexed { index, _ -> index !in initieelBericht.preKeyIdentifiers },
-                    privateOneTimePrekeys = it.privateOneTimePrekeys.filterIndexed { index, _ -> index !in initieelBericht.preKeyIdentifiers }
+                    publicOneTimePrekeys = it.publicOneTimePrekeys.filterIndexed { index, _ -> index !in initialMessage.preKeyIdentifiers },
+                    privateOneTimePrekeys = it.privateOneTimePrekeys.filterIndexed { index, _ -> index !in initialMessage.preKeyIdentifiers }
                 )
             }
         }
 
+        /*
+            TODO: Update prekeys on server
+         */
+
         return sharedKey
+    }
+
+    private fun sendInitialMessageToKvasir(targetPodId: String, initialMessage: InitialMessage) {
+        val jsonLd = """
+            {
+                "@context": {
+                    "kss": "https://kvasir.discover.ilabt.imec.be/vocab#"
+                },
+                "kss:identityPreKey": "${Base64.getEncoder().encodeToString(initialMessage.identityPreKey.encoded)}",
+                "kss:ephemeralPreKey": "${Base64.getEncoder().encodeToString(initialMessage.ephemeralPreKey.encoded)}",
+                "kss:preKeyIdentifiers": [${
+                    initialMessage.preKeyIdentifiers.joinToString(", ") {
+                        "\"${
+                            it
+                        }\""
+                    }
+                }],
+                "kss:initialCiphertext": "${Base64.getEncoder().encodeToString(initialMessage.initialCiphertext)}"
+            }
+        """.trimIndent()
+
+        val requestBody = jsonLd.toRequestBody("application/ld+json".toMediaType())
+        val request = Request.Builder()
+            .url("http://localhost:8080/${targetPodId}/initialMessage")
+            .put(requestBody)
+            .header("Content-Type", "application/ld+json")
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (response.code != 204) {
+                throw RuntimeException("Unexpected response code: ${response.code}, Message: ${response.message}")
+            }
+        }
+    }
+
+    private fun retrieveInitialMessageFromKvasir(targetPodId: String): InitialMessage {
+        val requestGet = Request.Builder()
+            .url("http://localhost:8080/${targetPodId}/initialMessage")
+            .get()
+            .build()
+        client.newCall(requestGet).execute().use { response ->
+            if (response.code != 200) {
+                throw RuntimeException("Unexpected response code: ${response.code}, Message: ${response.message}")
+            }
+            val responseBody = response.body?.string() ?: throw RuntimeException("Response body was null")
+            val objectMapper = jacksonObjectMapper()
+            val initialMessageString = objectMapper.readValue(responseBody, InitialMessageString::class.java)
+            return initialMessageString.toX25519()
+        }
     }
 }
