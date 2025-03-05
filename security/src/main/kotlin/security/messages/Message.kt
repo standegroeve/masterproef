@@ -20,7 +20,6 @@ data class EncryptedMessageString(
     @JsonProperty("kss:prevSequenceNumber") val PN: String
 ) {
     fun convertToEncryptedMessage(): EncryptedMessage {
-        val objectMapper = jacksonObjectMapper()
         return EncryptedMessage(
             messageId = messageId.toInt(),
             publicKey = Base64.getDecoder().decode(publicKey),
@@ -34,5 +33,6 @@ data class EncryptedMessageString(
 data class DecryptedMessage(
     val messageId: Int,
     val publicKey: ByteArray,
-    val plainText: String
+    val plainText: String,
+    val timestamp: Long
 )

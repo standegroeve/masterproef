@@ -4,6 +4,7 @@ import io.vertx.core.AbstractVerticle
 import io.vertx.ext.web.Router
 import io.vertx.ext.web.RoutingContext
 import security.crypto.generatePrekeys
+import java.nio.ByteBuffer
 
 class MainVerticle : AbstractVerticle() {
     val Alice = User("alice")
@@ -125,6 +126,8 @@ class MainVerticle : AbstractVerticle() {
                 </div>
 
                 <script>
+                    let aliceInbox = [];
+                    let bobInbox = [];
                     let podName = '';
                     
                     function initiateX3DH() {
@@ -144,7 +147,15 @@ class MainVerticle : AbstractVerticle() {
                     function sendMessage(sender) {
                         const message = sender === 'alice' ? document.getElementById('aliceMessage').value : document.getElementById('bobMessage').value;
                         if (message) {
-                            fetch('/sendMessage?pod=' + podName + '&sender=' + sender + '&message=' + encodeURIComponent(message))
+                            const timestamp = Date.now();
+                            
+                            if (sender === 'alice') {
+                                aliceInbox.push({ sender: sender, content: message, timestamp: timestamp });
+                            } else {
+                                bobInbox.push({ sender: sender, content: message, timestamp: timestamp });
+                            }
+                            
+                            fetch('/sendMessage?pod=' + podName + '&sender=' + sender + '&message=' + encodeURIComponent(message) + '&timestamp=' + timestamp)
                                 .then(response => response.json())
                                 .then(data => {
                                     alert(data.message);
@@ -156,7 +167,7 @@ class MainVerticle : AbstractVerticle() {
                                     // add to own inbox
                                     const inbox = sender === 'alice' ? document.getElementById('aliceInbox') : document.getElementById('bobInbox');
                                     let msgElement = document.createElement("p");
-                                    msgElement.innerHTML = "<strong>" + sender.charAt(0).toUpperCase() + sender.slice(1) + ":</strong> " + message;
+                                    msgElement.innerHTML = "<strong>" + sender.charAt(0).toUpperCase() + sender.slice(1) + ":</strong> " + message + ', ' + timestamp;
                                     
                                     // Append the new message at the bottom of the inbox
                                     inbox.appendChild(msgElement);
@@ -171,17 +182,38 @@ class MainVerticle : AbstractVerticle() {
                         fetch('/retrieveMessages?pod=' + podName + '&user=' + user)
                             .then(response => response.json())
                             .then(data => {
-                                const inbox = user === 'alice' ? document.getElementById('aliceInbox') : document.getElementById('bobInbox');
+                                const inbox = user === 'alice' ? aliceInbox : bobInbox;
+                                const receiver = user === "alice" ? "alice" : "bob";
+                                const sender = user === 'alice' ? 'bob' : 'alice';
+
                                 data.messages.forEach(msg => {
-                                    // Create a new paragraph element for each new message
-                                    let msgElement = document.createElement("p");
-                                    msgElement.innerHTML = "<strong>" + user.charAt(0).toUpperCase() + user.slice(1) + ":</strong> " + msg;
+                                    const plainTextMatch = msg.match(/plainText=([^,]+)/);
+                                    const plainText = plainTextMatch ? plainTextMatch[1] : null;
                                     
-                                    // Append the new message at the bottom of the inbox
-                                    inbox.appendChild(msgElement);
+                                    // Extract timestamp
+                                    const timestampMatch = msg.match(/timestamp=(\d+)/);
+                                    const timestamp = timestampMatch ? Number(timestampMatch[1]) : null;
+                                                                        
+                                    inbox.push({sender: sender, content: plainText, timestamp: timestamp})
                                 });
+                                
+                                displayMessages(receiver)
                             })
                             .catch(err => console.error('Error:', err));
+                    }
+                    
+                    function displayMessages(receiver) {
+                        const messages = receiver === 'alice' ? aliceInbox : bobInbox
+                        const inbox = receiver === 'alice' ? document.getElementById('aliceInbox') : document.getElementById('bobInbox');
+                        
+                        inbox.innerHTML = '';
+                        messages.sort((a,b) => a.timestamp - b.timestamp);
+                        
+                        for (let i = 0; i<messages.length; i++) {
+                            let msgElement = document.createElement("p");
+                            msgElement.innerHTML = "<strong>" + messages[i].sender.charAt(0).toUpperCase() + messages[i].sender.slice(1) + ":</strong> " + messages[i].content + ', ' + messages[i].timestamp;
+                            inbox.appendChild(msgElement);
+                        }
                     }
                 </script>
             </body>
@@ -190,38 +222,6 @@ class MainVerticle : AbstractVerticle() {
         ctx.response()
             .putHeader("Content-Type", "text/html")
             .end(html)
-    }
-
-    // Endpoint to send a message
-    private fun sendMessage(ctx: RoutingContext) {
-        val targetPodId = ctx.request().getParam("pod")
-        val sender = ctx.request().getParam("sender")
-        val message = ctx.request().getParam("message")
-
-        if (targetPodId != null && sender != null && message != null) {
-            if (isNotInitialized) {
-                if (sender == "alice") {
-                    Alice.sendInitialMessage(targetPodId, message.toByteArray())
-                    isNotInitialized = false
-                } else {
-                    Bob.sendInitialMessage(targetPodId, message.toByteArray())
-                    isNotInitialized = false
-                }
-            } else {
-                if (sender == "alice") {
-                    Alice.sendMessage(targetPodId, message.toByteArray())
-                } else {
-                    Bob.sendMessage(targetPodId, message.toByteArray())
-                }
-            }
-            ctx.response()
-                .putHeader("Content-Type", "application/json")
-                .end("{\"message\": \"Message sent from $sender to $targetPodId pod\"}")
-        } else {
-            ctx.response()
-                .putHeader("Content-Type", "application/json")
-                .end("{\"message\": \"All parameters (pod, sender, message) are required!\"}")
-        }
     }
 
     private fun initiateX3DH(ctx: RoutingContext) {
@@ -239,6 +239,41 @@ class MainVerticle : AbstractVerticle() {
             ctx.response()
                 .putHeader("Content-Type", "application/json")
                 .end("{\"message\": \"Pod name is required to initiate X3DH!\"}")
+        }
+    }
+
+    // Endpoint to send a message
+    private fun sendMessage(ctx: RoutingContext) {
+        val targetPodId = ctx.request().getParam("pod")
+        val sender = ctx.request().getParam("sender")
+        val message = ctx.request().getParam("message")
+        val timestampString = ctx.request().getParam("timestamp")
+        val timestampBytes = ByteBuffer.allocate(8).putLong(timestampString.toLong()).array()
+
+        if (targetPodId != null && sender != null && message != null) {
+
+            if (isNotInitialized) {
+                if (sender == "alice") {
+                    Alice.sendInitialMessage(targetPodId, message.toByteArray(), timestampBytes)
+                    isNotInitialized = false
+                } else {
+                    Bob.sendInitialMessage(targetPodId, message.toByteArray(), timestampBytes)
+                    isNotInitialized = false
+                }
+            } else {
+                if (sender == "alice") {
+                    Alice.sendMessage(targetPodId, message.toByteArray(), timestampBytes)
+                } else {
+                    Bob.sendMessage(targetPodId, message.toByteArray(), timestampBytes)
+                }
+            }
+            ctx.response()
+                .putHeader("Content-Type", "application/json")
+                .end("{\"message\": \"Message sent from $sender to $targetPodId pod\"}")
+        } else {
+            ctx.response()
+                .putHeader("Content-Type", "application/json")
+                .end("{\"message\": \"All parameters (pod, sender, message) are required!\"}")
         }
     }
 

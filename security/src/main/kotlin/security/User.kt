@@ -1,5 +1,6 @@
 package security
 
+import org.apache.kafka.shaded.com.google.protobuf.Timestamp
 import org.bouncycastle.crypto.params.X25519PrivateKeyParameters
 import org.bouncycastle.crypto.params.X25519PublicKeyParameters
 import security.crypto.DiffieHellman
@@ -9,6 +10,7 @@ import security.crypto.generateX25519KeyPair
 import security.messages.DecryptedMessage
 import security.messages.EncryptedMessage
 import security.messages.X3DHPreKeys
+import java.nio.ByteBuffer
 
 class User(val podId: String) {
     var initialDHPublicKey: ByteArray? = null
@@ -32,14 +34,14 @@ class User(val podId: String) {
 
     var latestReceivedMessageId = -1
 
-    fun sendInitialMessage(targetPod: String, input: ByteArray) {
+    fun sendInitialMessage(targetPod: String, input: ByteArray, timestampBytes: ByteArray) {
         DHKeyPair = generateX25519KeyPair()
         val initialDHoutput = DiffieHellman(DHKeyPair!!.second, X25519PublicKeyParameters(initialDHPublicKey))
         sendingKey = KeyRatchet.SymmetricKeyRatchetRoot(this, initialDHoutput)
-        sendMessage(targetPod, input)
+        sendMessage(targetPod, input, timestampBytes)
     }
 
-    fun sendMessage(targetPod: String, input: ByteArray) {
+    fun sendMessage(targetPod: String, input: ByteArray, timestampBytes: ByteArray) {
         val messageId = sentMessageId
         sentMessageId++
 
@@ -52,7 +54,7 @@ class User(val podId: String) {
         val associatedData = DHKeyPair!!.first.encoded + preKeys!!.publicIdentityPreKey.encoded + targetPublicKey!!
 
         // encrypt message
-        val ciphertext = aesGcmEncrypt(input, messageKey, associatedData)
+        val ciphertext = aesGcmEncrypt(timestampBytes + input, messageKey, associatedData)
         val encrpytedMessage = EncryptedMessage(messageId + 1, DHKeyPair!!.first.encoded, ciphertext!!, sequenceNumber, PN)
 
         // sends the message to the pod
@@ -80,7 +82,7 @@ class User(val podId: String) {
 
                 // decrypt message
                 val decryptedData = aesGcmDecrypt(message.cipherText, messageKey!!, associatedData)
-                messagesList.add(DecryptedMessage(message.messageId, message.publicKey, String(decryptedData!!, Charsets.UTF_8)))
+                messagesList.add(DecryptedMessage(message.messageId, message.publicKey, String(decryptedData!!.copyOfRange(8, decryptedData.size), Charsets.UTF_8), ByteBuffer.wrap(decryptedData.copyOfRange(0, 8)).long))
                 continue
             }
 
@@ -123,7 +125,7 @@ class User(val podId: String) {
             // decrypt message
             val decryptedData = aesGcmDecrypt(message.cipherText, messageKey, associatedData)
 
-            messagesList.add(DecryptedMessage(message.messageId, message.publicKey, String(decryptedData!!, Charsets.UTF_8)))
+            messagesList.add(DecryptedMessage(message.messageId, message.publicKey, String(decryptedData!!.copyOfRange(8, decryptedData.size), Charsets.UTF_8), ByteBuffer.wrap(decryptedData.copyOfRange(0, 8)).long))
         }
 
         return messagesList
