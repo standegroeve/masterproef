@@ -24,14 +24,19 @@ class MainVerticle : AbstractVerticle() {
         // Serve the HTML page at the root URL
         router.get("/").handler(this::serveHtmlPage)
 
-        // Define the endpoint to initiate the X3DH key agreement
-        router.get("/initiateX3DH").handler(this::initiateX3DH)
+        // Define the endpoints for X3DH
+        router.get("/uploadPreKeys").handler(this::uploadPreKeys)
+        router.get("/sendInitialMessage").handler(this::sendInitialMessage)
+        router.get("/processInitialMessage").handler(this::processInitialMessage)
 
         // Define the endpoint to send a message
         router.get("/sendMessage").handler(this::sendMessage)
 
         //Define the endpoint to retrieve the messages
         router.get("/retrieveMessages").handler(this::retrieveMessages)
+
+        // Define the endpoint to initialize slices schema
+        router.get("/initializeSlices").handler(this::initializeSlices)
 
         // Create the HTTP server
         vertx.createHttpServer()
@@ -95,7 +100,13 @@ class MainVerticle : AbstractVerticle() {
                         <h1>Communication Pod</h1>
                         <label for="podName">Enter Target Pod Name:</label>
                         <input type="text" id="podName" placeholder="Pod Name">
-                        <button onclick="initiateX3DH()">Initiate X3DH</button>
+                        <input type="text" id="authCode" placeholder="Authorization Code">
+                    </div>
+                    <div class="top-section">
+                        <button onclick="initializeSlices()">Initialize Slices</button>
+                        <button onclick="uploadPreKeys()">Upload PreKeys</button>
+                        <button onclick="sendInitialMessage()">Send Initial Message</button>
+                        <button onclick="processInitialMessage()">Process Initial Message</button>
                     </div>
     
                     <div class="input-container">
@@ -130,18 +141,44 @@ class MainVerticle : AbstractVerticle() {
                     let bobInbox = [];
                     let podName = '';
                     
-                    function initiateX3DH() {
+                    function initializeSlices() {
                         podName = document.getElementById('podName').value;
-                        if (podName) {
-                            fetch('/initiateX3DH?pod=' + podName)
+                        let authCode = document.getElementById('authCode').value;
+                        if (podName && authCode) {
+                            fetch('/initializeSlices?pod=' + podName + '&authCode=' + authCode)
                                 .then(response => response.json())
                                 .then(data => {
                                     alert(data.message);
                                 })
                                 .catch(err => console.error('Error:', err));
                         } else {
-                            alert('Please enter a pod first!');
+                            alert('Please enter both Pod Name and Authorization Code!');
                         }
+                    }
+                    
+                    function uploadPreKeys() {
+                        podName = document.getElementById('podName').value;
+                        let authCode = document.getElementById('authCode').value;
+                        fetch('/uploadPreKeys?pod=' + podName + '&authCode=' + authCode)
+                            .then(response => response.json())
+                            .then(data => alert(data.message))
+                            .catch(err => console.error('Error:', err));
+                    }
+                    function sendInitialMessage() {
+                        podName = document.getElementById('podName').value;
+                        let authCode = document.getElementById('authCode').value;
+                        fetch('/sendInitialMessage?pod=' + podName + '&authCode=' + authCode)
+                            .then(response => response.json())
+                            .then(data => alert(data.message))
+                            .catch(err => console.error('Error:', err));
+                    }
+                    function processInitialMessage() {
+                        podName = document.getElementById('podName').value;
+                        let authCode = document.getElementById('authCode').value;
+                        fetch('/processInitialMessage?pod=' + podName + '&authCode=' + authCode)
+                            .then(response => response.json())
+                            .then(data => alert(data.message))
+                            .catch(err => console.error('Error:', err));
                     }
 
                     function sendMessage(sender) {
@@ -224,21 +261,66 @@ class MainVerticle : AbstractVerticle() {
             .end(html)
     }
 
-    private fun initiateX3DH(ctx: RoutingContext) {
+    private fun initializeSlices(ctx: RoutingContext) {
         val targetPodId = ctx.request().getParam("pod")
+        val authCode = ctx.request().getParam("authCode")
 
-        if (targetPodId != null) {
-            X3DH.uploadPreKeys(targetPodId, Bob.preKeys!!.getPublic())
-            Alice.sharedKey = X3DH.sendInitialMessage(Alice, targetPodId, Alice.preKeys!!)
-            Bob.sharedKey = X3DH.processInitialMessage(Bob, targetPodId, Bob.preKeys!!)
+        if (targetPodId != null && authCode != null) {
+            // Placeholder for initializing slices schema
+            X3DH.initiateSliceSchema(targetPodId, authCode)
 
             ctx.response()
                 .putHeader("Content-Type", "application/json")
-                .end("{\"message\": \"X3DH initiated for pod '$targetPodId'\"}")
+                .end("{\"message\": \"Initiate slices to $targetPodId pod\"}")
         } else {
             ctx.response()
                 .putHeader("Content-Type", "application/json")
-                .end("{\"message\": \"Pod name is required to initiate X3DH!\"}")
+                .end("{\"message\": \"Pod name and authentication code is required to initiate slices!\"}")
+        }
+    }
+
+    private fun uploadPreKeys(ctx: RoutingContext) {
+        val targetPodId = ctx.request().getParam("pod")
+        val authCode = ctx.request().getParam("authCode")
+        val user = if (targetPodId == "alice") Alice else Bob
+
+        if (authCode != null) {
+            X3DH.uploadPreKeys(targetPodId, user.preKeys!!.getPublic(), authCode)
+            ctx.response().putHeader("Content-Type", "application/json")
+                .end("{\"message\": \"PreKeys uploaded for $targetPodId\"}")
+        } else {
+            ctx.response().putHeader("Content-Type", "application/json")
+                .end("{\"message\": \"Authentication code is required!\"}")
+        }
+    }
+
+    private fun sendInitialMessage(ctx: RoutingContext) {
+        val targetPodId = ctx.request().getParam("pod")
+        val authCode = ctx.request().getParam("authCode")
+        val user = if (targetPodId == "alice") Bob else Alice
+
+        if (authCode != null) {
+            user.sharedKey = X3DH.sendInitialMessage(user, targetPodId, user.preKeys!!, authCode)
+            ctx.response().putHeader("Content-Type", "application/json")
+                .end("{\"message\": \"Initial message sent for $targetPodId\"}")
+        } else {
+            ctx.response().putHeader("Content-Type", "application/json")
+                .end("{\"message\": \"Authentication code is required!\"}")
+        }
+    }
+
+    private fun processInitialMessage(ctx: RoutingContext) {
+        val targetPodId = ctx.request().getParam("pod")
+        val authCode = ctx.request().getParam("authCode")
+        val user = if (targetPodId == "alice") Alice else Bob
+
+        if (targetPodId != null && authCode != null) {
+            user.sharedKey = X3DH.processInitialMessage(user, targetPodId, user.preKeys!!, authCode)
+            ctx.response().putHeader("Content-Type", "application/json")
+                .end("{\"message\": \"Initial message processed for $targetPodId\"}")
+        } else {
+            ctx.response().putHeader("Content-Type", "application/json")
+                .end("{\"message\": \"Authentication code is required!\"}")
         }
     }
 

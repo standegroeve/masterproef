@@ -8,22 +8,22 @@ import java.util.*
 data class InitialMessage(
     val identityPreKey: X25519PublicKeyParameters,
     val ephemeralPreKey: X25519PublicKeyParameters,
-    val preKeyIdentifiers: List<Int>,
+    val preKeyIdentifiers: Int,
     val initialCiphertext: ByteArray
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class InitialMessageString(
-    @JsonProperty("kss:identityPreKey") val identityPreKey: String,
-    @JsonProperty("kss:ephemeralPreKey") val ephemeralPreKey: String,
-    @JsonProperty("kss:preKeyIdentifiers") val preKeyIdentifiers: List<String>,
-    @JsonProperty("kss:initialCiphertext") val initialCiphertext: String
+    @JsonProperty("kss_identityPreKey") val identityPreKey: String,
+    @JsonProperty("kss_ephemeralPreKey") val ephemeralPreKey: String,
+    @JsonProperty("kss_preKeyIdentifiers") val preKeyIdentifiers: String,
+    @JsonProperty("kss_initialCiphertext") val initialCiphertext: String
 ) {
     fun toX25519(): InitialMessage {
         return  InitialMessage(
             identityPreKey = X25519PublicKeyParameters(Base64.getDecoder().decode(identityPreKey)),
             ephemeralPreKey = X25519PublicKeyParameters(Base64.getDecoder().decode(ephemeralPreKey)),
-            preKeyIdentifiers = preKeyIdentifiers.map { it.toInt() },
+            preKeyIdentifiers = preKeyIdentifiers.toInt(),
             initialCiphertext = Base64.getDecoder().decode(initialCiphertext)
         )
     }

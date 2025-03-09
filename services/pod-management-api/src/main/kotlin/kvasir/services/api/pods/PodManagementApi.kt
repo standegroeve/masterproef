@@ -197,10 +197,7 @@ class PodManagementApi(
             if (existingPod == null) {
                 Uni.createFrom().item(Response.status(Response.Status.NOT_FOUND).build())
             } else {
-                val x3dhKeys = existingPod.x3dhKeys
-                    ?: throw NotFoundException("No x3dh keys were defined")
-                val updatedX3dhKeys = x3dhKeys.toMutableMap().apply { put(KvasirVocab.initialMessage, input) }
-                podStore.persist(existingPod.copy(x3dhKeys = updatedX3dhKeys))
+                podStore.persist(existingPod.copy(x3dhKeys = mapOf(KvasirVocab.initialMessage to input)))
                     .map { Response.noContent().build() }
             }
         }

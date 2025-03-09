@@ -40,17 +40,16 @@ fun generatePrekeys(): X3DHPreKeys {
     val signedPreKeyPair: Pair<X25519PublicKeyParameters, X25519PrivateKeyParameters> = generateX25519KeyPair()
     val signature: ByteArray = xeddsa_sign(identityKeyPair.second, signedPreKeyPair.first.encoded)
     // create a list with one-time keyPairs
-    val oneTimePreKeyPairs: List<Pair<X25519PublicKeyParameters, X25519PrivateKeyParameters>> = (1..5).map {
-        generateX25519KeyPair()
-    }
+    val oneTimePreKeyPairs: Pair<X25519PublicKeyParameters, X25519PrivateKeyParameters> = generateX25519KeyPair()
+
     return X3DHPreKeys(
         identityKeyPair.first,
         signedPreKeyPair.first,
-        oneTimePreKeyPairs.map { it.first },
+        oneTimePreKeyPairs.first,
         signature,
         identityKeyPair.second,
         signedPreKeyPair.second,
-        oneTimePreKeyPairs.map { it.second },
+        oneTimePreKeyPairs.second,
     )
 }
 

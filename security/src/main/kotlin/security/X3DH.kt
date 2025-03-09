@@ -1,5 +1,8 @@
 package security
 
+import com.fasterxml.jackson.core.type.TypeReference
+import com.fasterxml.jackson.databind.util.JSONPObject
+import com.fasterxml.jackson.module.kotlin.convertValue
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -7,57 +10,108 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.bouncycastle.crypto.params.X25519PrivateKeyParameters
 import java.util.*
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
+import org.apache.kafka.common.protocol.types.Field.Bool
 import org.bouncycastle.crypto.params.X25519PublicKeyParameters
 import security.crypto.*
 import security.messages.*
+import java.util.concurrent.TimeUnit
 
 
 object X3DH {
     private val client = OkHttpClient()
 
-    fun uploadPreKeys(podId: String, preKeys: X3DHPublicPreKeys) {
+    fun initiateSliceSchema(podId: String, authenticationCode: String) {
         val jsonLd = """
-        {
-            "@context": {
-                "kss": "https://kvasir.discover.ilabt.imec.be/vocab#"
-            },
-            "kss:publicIdentityPreKeyEd25519": "${Base64.getEncoder().encodeToString(preKeys.publicIdentityPreKeyEd25519.encoded)}",
-            "kss:publicIdentityPreKeyX25519": "${Base64.getEncoder().encodeToString(preKeys.publicIdentityPreKeyX25519.encoded)}",
-            "kss:publicSignedPreKey": "${Base64.getEncoder().encodeToString(preKeys.publicSignedPreKey.encoded)}",
-            "kss:publicOneTimePreKeys": [${
-            preKeys.publicOneTimePreKeys?.joinToString(", ") {
-                "\"${
-                    Base64.getEncoder().encodeToString(it.encoded)
-                }\""
+            {
+                "@context": {
+                    "kss": "https://kvasir.discover.ilabt.imec.be/vocab#"
+                },
+                "kss:name": "PreKeys",
+                "kss:description": "Schema for storing public pre-keys",
+                "kss:schema": "type Query { publicPreKeys: [kss_PublicPreKeys!]! initialMessages: [kss_InitialMessage!]! } type kss_PublicPreKeys { id: ID! kss_publicIdentityPreKeyEd25519: String! kss_publicIdentityPreKeyX25519: String! kss_publicSignedPreKey: String! kss_publicOneTimePreKeys: String! kss_preKeySignature: String! } type kss_InitialMessage { id: ID! kss_identityPreKey: String! kss_ephemeralPreKey: String! kss_preKeyIdentifiers: String! kss_initialCiphertext: String! } type Mutation { addPublicPreKeys(publicPreKeys: [PublicPreKeysInput!]!): ID! addInitialMessage(initialMessage: InitialMessageInput!): ID! } input PublicPreKeysInput @class(iri: \"kss:PublicPreKeys\") { id: ID! kss_publicIdentityPreKeyEd25519: String! kss_publicIdentityPreKeyX25519: String! kss_publicSignedPreKey: String! kss_publicOneTimePreKeys: String! kss_preKeySignature: String! } input InitialMessageInput @class(iri: \"kss:InitialMessage\") { id: ID! kss_identityPreKey: String! kss_ephemeralPreKey: String! kss_preKeyIdentifiers: String! kss_initialCiphertext: String! }"
             }
-        }],
-            "kss:preKeySignature": "${Base64.getEncoder().encodeToString(preKeys.preKeySignature)}"
-        }
-    """.trimIndent()
+        """.trimIndent()
 
         val requestBody = jsonLd.toRequestBody("application/ld+json".toMediaType())
 
         val request = Request.Builder()
-            .url("http://localhost:8080/${podId}/x3dh")  // Replace with actual endpoint
-            .put(requestBody)
+            .url("http://localhost:8080/${podId}/slices")
+            .post(requestBody)
             .header("Content-Type", "application/ld+json")
+            .header("Authorization", "Bearer $authenticationCode")
             .build()
 
         client.newCall(request).execute().use { response ->
-            if (response.code != 204) {
+            if (response.code == 409) {
+                println("Conflict: schema already created")
+                return;
+            }
+            if (response.code != 201) {
                 throw RuntimeException("Unexpected response code: ${response.code}, Message: ${response.message}")
             }
+            return
+        }
+    }
+
+    fun uploadPreKeys(podId: String, preKeys: X3DHPublicPreKeys, authenticationCode: String) {
+        //deletePreviousPreKeys(podId, authenticationCode)
+
+        val jsonLd = """
+            {
+              "@context": {
+                  "kss": "https://kvasir.discover.ilabt.imec.be/vocab#",
+            	  "ex": "http://example.org/"
+              },
+              "kss:insert": [{
+            	"@id": "ex:$podId",
+                  "@type": "kss:PublicPreKeys",
+                  "kss:publicIdentityPreKeyEd25519": "${Base64.getEncoder().encodeToString(preKeys.publicIdentityPreKeyEd25519.encoded)}",
+                  "kss:publicIdentityPreKeyX25519": "${Base64.getEncoder().encodeToString(preKeys.publicIdentityPreKeyX25519.encoded)}",
+                  "kss:publicSignedPreKey": "${Base64.getEncoder().encodeToString(preKeys.publicSignedPreKey.encoded)}",
+                  "kss:publicOneTimePreKeys": "${Base64.getEncoder().encodeToString(preKeys.publicOneTimePreKeys.encoded)}",
+                  "kss:preKeySignature":  "${Base64.getEncoder().encodeToString(preKeys.preKeySignature)}"
+                }],
+              "kss:delete": []
+            }
+            """.trimIndent()
+
+        val requestBody = jsonLd.toRequestBody("application/ld+json".toMediaType())
+
+        val request = Request.Builder()
+            .url("http://localhost:8080/${podId}/slices/PreKeys/changes")
+            .post(requestBody)
+            .header("Content-Type", "application/ld+json")
+            .header("Authorization", "Bearer $authenticationCode")
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            println(response.message)
+            if (response.code != 201) {
+                throw RuntimeException("Unexpected response code: ${response.code}, Message: ${response.message}")
+            }
+            return
         }
     }
 
 
-    fun getPublicX3DHKeys(podId: String): X3DHPublicPreKeys {
-        val requestGet = Request.Builder()
-            .url("http://localhost:8080/${podId}/x3dh")
-            .get()
+    fun getPublicX3DHKeys(podId: String, authenticationCode: String): X3DHPublicPreKeys {
+        val json = """
+            { "query": "{ publicPreKeys @filter(if: \"id==http://example.org/$podId\") { id kss_publicIdentityPreKeyEd25519 kss_publicIdentityPreKeyX25519 kss_publicSignedPreKey kss_publicOneTimePreKeys kss_preKeySignature } }" }
+            """.trimIndent()
+
+
+        val requestBody = json.toRequestBody("application/json".toMediaType())
+
+        val requestPost = Request.Builder()
+            .url("http://localhost:8080/${podId}/slices/PreKeys/query")
+            .post(requestBody)
+            .header("Content-Type", "application/json")
+            .header("Authorization", "Bearer $authenticationCode")
             .build()
 
-        client.newCall(requestGet).execute().use { response ->
+
+        client.newCall(requestPost).execute().use { response ->
             if (response.code != 200) {
                 throw RuntimeException("Unexpected response code: ${response.code}, Message: ${response.message}")
             }
@@ -65,24 +119,40 @@ object X3DH {
             val responseBody = response.body?.string() ?: throw RuntimeException("Response body was null")
 
             val objectMapper = jacksonObjectMapper()
-            val keysAsString = objectMapper.readValue(responseBody, X3DHPublicKeysAsString::class.java)
-            return keysAsString.convertToX25519()
+
+            // Deserialize JSON into a generic Map
+            val keysAsMap: Map<String, Any> = objectMapper.readValue(responseBody)
+
+            // Extract "publicPreKeys" list safely
+            val publicPreKeys = (keysAsMap.get("data") as? Map<String, Any>)
+                ?.get("publicPreKeys") as? List<Map<String, Any>>
+                ?: throw IllegalArgumentException("Invalid JSON structure: 'publicPreKeys' not found")
+
+            val X3dhKeysAsString: X3DHPublicKeysAsString = objectMapper.convertValue(publicPreKeys.firstOrNull()
+                ?: throw IllegalArgumentException("No public pre-keys found in response")
+            )
+
+            return X3dhKeysAsString.convertToX25519()
         }
     }
 
     fun sendInitialMessage(
         actor: User,
         podId: String,
-        preKeys: X3DHPreKeys
+        preKeys: X3DHPreKeys,
+        authenticationCode: String
     ): ByteArray {
-        val targetPrekeys: X3DHPublicPreKeys = getPublicX3DHKeys(podId)
+        val targetPrekeys: X3DHPublicPreKeys = getPublicX3DHKeys(podId, authenticationCode)
+
+        println("keys: $targetPrekeys")
 
         actor.initialDHPublicKey = targetPrekeys.publicSignedPreKey.encoded
         actor.targetPublicKey = targetPrekeys.publicIdentityPreKeyX25519.encoded
         actor.DHKeyPair = generateX25519KeyPair()
         /*
-        Verifiy signature
-     */
+            Verifiy signature
+         */
+
         val verified = xeddsa_verify(
             targetPrekeys.publicIdentityPreKeyEd25519,
             targetPrekeys.publicSignedPreKey.encoded,
@@ -90,12 +160,13 @@ object X3DH {
         )
 
         if (!verified) {
+            println("Verification failed")
             throw RuntimeException("Signature Verification failed")
         }
 
         /*
-        Calculate sharedKey
-     */
+            Calculate sharedKey
+         */
         val ephemeralKeyPair = generateX25519KeyPair()
 
         val DH1 = DiffieHellman(preKeys.privateIdentityPreKey, targetPrekeys.publicSignedPreKey)
@@ -106,15 +177,15 @@ object X3DH {
         val salt = ByteArray(32) { 0x00.toByte() }
         val info = ByteArray(0)
 
-        val oneTimeKeysUsed = mutableListOf<Int>()
+        val oneTimeKeysUsed = 0
         var sharedKey: ByteArray
         if (targetPrekeys.publicOneTimePreKeys == null) {
             sharedKey = HKDF(salt, F + DH1 + DH2 + DH3, info, 32)
 
         } else {
-            val DH4 = DiffieHellman(ephemeralKeyPair.second, targetPrekeys.publicOneTimePreKeys.first())
-            oneTimeKeysUsed.add(-1)
-            oneTimeKeysUsed.add(0)
+            val DH4 = DiffieHellman(ephemeralKeyPair.second, targetPrekeys.publicOneTimePreKeys)
+//            oneTimeKeysUsed.add(-1)
+//            oneTimeKeysUsed.add(0)
             sharedKey = HKDF(salt, F + DH1 + DH2 + DH3 + DH4, info, 32)
         }
 
@@ -128,34 +199,35 @@ object X3DH {
 
 
         /*
-        Send the Initial Message
-
-        TODO Send the message, now its stored locally for testing
-     */
+            Send the initial message
+         */
         sendInitialMessageToKvasir(podId, InitialMessage(
             identityPreKey = preKeys.publicIdentityPreKey,
             ephemeralPreKey = ephemeralKeyPair.first,
             preKeyIdentifiers = oneTimeKeysUsed,
             initialCiphertext = ciphertext!!
-        ))
+        ), authenticationCode)
+
+        println("sk1: ${sharedKey[0]}")
 
         return sharedKey
     }
 
-    fun processInitialMessage(actor: User, podId: String, preKeys: X3DHPreKeys): ByteArray {
+    fun processInitialMessage(actor: User, podId: String, preKeys: X3DHPreKeys, authenticationCode: String): ByteArray {
         /*
-        Fetch initial message
-        TODO: Fetch the initial message now its stored locally
-     */
-        val initialMessage = retrieveInitialMessageFromKvasir(podId)
+            Fetch the initial message
+         */
+        val initialMessage = retrieveInitialMessageFromKvasir(podId, authenticationCode)
+
+        println("initMessage: $initialMessage")
 
         actor.DHKeyPair = Pair(actor.preKeys!!.publicSignedPrekey, actor.preKeys!!.privateSignedPrekey)
 
         actor.targetPublicKey = initialMessage.identityPreKey.encoded
 
         /*
-        Calculate sharedKey
-     */
+            Calculate sharedKey
+         */
 
         val DH1 = DiffieHellman(preKeys.privateSignedPrekey, initialMessage.identityPreKey)
         val DH2 = DiffieHellman(preKeys.privateIdentityPreKey, initialMessage.ephemeralPreKey)
@@ -166,26 +238,29 @@ object X3DH {
         val info = ByteArray(0)
 
         var sharedKey: ByteArray
-        if (initialMessage.preKeyIdentifiers.isEmpty()) {
+        if (initialMessage.preKeyIdentifiers == null) {
             sharedKey = HKDF(salt, F + DH1 + DH2 + DH3, info, 32)
 
         } else {
-            val DH4 = DiffieHellman(preKeys.privateOneTimePrekeys.first(), initialMessage.ephemeralPreKey)
+            val DH4 = DiffieHellman(preKeys.privateOneTimePrekeys, initialMessage.ephemeralPreKey)
             sharedKey = HKDF(salt, F + DH1 + DH2 + DH3 + DH4, info, 32)
         }
+
+        println("check")
+        println("sk2: $sharedKey[0]}")
 
         val associatedData: ByteArray = initialMessage.identityPreKey.encoded + preKeys.publicIdentityPreKey.encoded
 
         val plaintext = aesGcmDecrypt(initialMessage.initialCiphertext, sharedKey, associatedData)
 
-        if (plaintext != null) {
-            actor.preKeys = actor.preKeys?.let {
-                preKeys.copy(
-                    publicOneTimePrekeys = it.publicOneTimePrekeys.filterIndexed { index, _ -> index !in initialMessage.preKeyIdentifiers },
-                    privateOneTimePrekeys = it.privateOneTimePrekeys.filterIndexed { index, _ -> index !in initialMessage.preKeyIdentifiers }
-                )
-            }
-        }
+//        if (plaintext != null) {
+//            actor.preKeys = actor.preKeys?.let {
+//                preKeys.copy(
+//                    publicOneTimePrekeys = it.publicOneTimePrekeys.filterIndexed { index, _ -> index !in initialMessage.preKeyIdentifiers },
+//                    privateOneTimePrekeys = it.privateOneTimePrekeys.filterIndexed { index, _ -> index !in initialMessage.preKeyIdentifiers }
+//                )
+//            }
+//        }
 
         /*
             TODO: Update prekeys on server
@@ -194,51 +269,131 @@ object X3DH {
         return sharedKey
     }
 
-    private fun sendInitialMessageToKvasir(targetPodId: String, initialMessage: InitialMessage) {
+    private fun sendInitialMessageToKvasir(targetPodId: String, initialMessage: InitialMessage, authenticationCode: String) {
         val jsonLd = """
             {
-                "@context": {
-                    "kss": "https://kvasir.discover.ilabt.imec.be/vocab#"
-                },
-                "kss:identityPreKey": "${Base64.getEncoder().encodeToString(initialMessage.identityPreKey.encoded)}",
-                "kss:ephemeralPreKey": "${Base64.getEncoder().encodeToString(initialMessage.ephemeralPreKey.encoded)}",
-                "kss:preKeyIdentifiers": [${
-                    initialMessage.preKeyIdentifiers.joinToString(", ") {
-                        "\"${
-                            it
-                        }\""
-                    }
+              "@context": {
+                  "kss": "https://kvasir.discover.ilabt.imec.be/vocab#",
+            	  "ex": "http://example.org/"
+              },
+              "kss:insert": [{
+            	  "@id": "ex:$targetPodId",
+                  "@type": "kss:InitialMessage",
+                  "kss:identityPreKey": "${Base64.getEncoder().encodeToString(initialMessage.identityPreKey.encoded)}",
+                  "kss:ephemeralPreKey": "${Base64.getEncoder().encodeToString(initialMessage.ephemeralPreKey.encoded)}",
+                  "kss:preKeyIdentifiers": "${initialMessage.preKeyIdentifiers.toString()}",
+                  "kss:initialCiphertext":  "${Base64.getEncoder().encodeToString(initialMessage.initialCiphertext)}"
                 }],
-                "kss:initialCiphertext": "${Base64.getEncoder().encodeToString(initialMessage.initialCiphertext)}"
+              "kss:delete": []
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val requestBody = jsonLd.toRequestBody("application/ld+json".toMediaType())
+
         val request = Request.Builder()
-            .url("http://localhost:8080/${targetPodId}/initialMessage")
-            .put(requestBody)
+            .url("http://localhost:8080/${targetPodId}/slices/PreKeys/changes")
+            .post(requestBody)
             .header("Content-Type", "application/ld+json")
+            .header("Authorization", "Bearer $authenticationCode")
             .build()
+
         client.newCall(request).execute().use { response ->
-            if (response.code != 204) {
+            println("initmessgaemessage: ${response.message}")
+            if (response.code != 201) {
                 throw RuntimeException("Unexpected response code: ${response.code}, Message: ${response.message}")
             }
+            return
         }
+
+
+
+//        val jsonLd = """
+//            {
+//                "@context": {
+//                    "kss": "https://kvasir.discover.ilabt.imec.be/vocab#"
+//                },
+//                "kss:identityPreKey": "${Base64.getEncoder().encodeToString(initialMessage.identityPreKey.encoded)}",
+//                "kss:ephemeralPreKey": "${Base64.getEncoder().encodeToString(initialMessage.ephemeralPreKey.encoded)}",
+//                "kss:preKeyIdentifiers": [${
+//                    initialMessage.preKeyIdentifiers.joinToString(", ") {
+//                        "\"${
+//                            it
+//                        }\""
+//                    }
+//                }],
+//                "kss:initialCiphertext": "${Base64.getEncoder().encodeToString(initialMessage.initialCiphertext)}"
+//            }
+//        """.trimIndent()
+//
+//        val requestBody = jsonLd.toRequestBody("application/ld+json".toMediaType())
+//        val request = Request.Builder()
+//            .url("http://localhost:8080/${targetPodId}/initialMessage")
+//            .put(requestBody)
+//            .header("Content-Type", "application/ld+json")
+//            .build()
+//        client.newCall(request).execute().use { response ->
+//            if (response.code != 204) {
+//                throw RuntimeException("Unexpected response code: ${response.code}, Message: ${response.message}")
+//            }
+//        }
     }
 
-    private fun retrieveInitialMessageFromKvasir(targetPodId: String): InitialMessage {
-        val requestGet = Request.Builder()
-            .url("http://localhost:8080/${targetPodId}/initialMessage")
-            .get()
+    private fun retrieveInitialMessageFromKvasir(targetPodId: String, authenticationCode: String): InitialMessage {
+        val json = """
+            { "query": "{ initialMessages @filter(if: \"id==http://example.org/$targetPodId\") { id kss_identityPreKey kss_ephemeralPreKey kss_preKeyIdentifiers kss_initialCiphertext } }" }
+            """.trimIndent()
+
+        val requestBody = json.toRequestBody("application/json".toMediaType())
+
+        val requestPost = Request.Builder()
+            .url("http://localhost:8080/${targetPodId}/slices/PreKeys/query")
+            .post(requestBody)
+            .header("Content-Type", "application/json")
+            .header("Authorization", "Bearer $authenticationCode")
             .build()
-        client.newCall(requestGet).execute().use { response ->
+
+        client.newCall(requestPost).execute().use { response ->
             if (response.code != 200) {
                 throw RuntimeException("Unexpected response code: ${response.code}, Message: ${response.message}")
             }
+
             val responseBody = response.body?.string() ?: throw RuntimeException("Response body was null")
+
             val objectMapper = jacksonObjectMapper()
-            val initialMessageString = objectMapper.readValue(responseBody, InitialMessageString::class.java)
+
+            // Deserialize JSON into a generic Map
+            val keysAsMap: Map<String, Any> = objectMapper.readValue(responseBody)
+            println(keysAsMap)
+            // Extract "messages" list safely
+            val initialMessageList = (keysAsMap.get("data") as? Map<String, Any>)
+                ?.get("initialMessages") as? List<Map<String, Any>>
+                ?: throw IllegalArgumentException("Invalid JSON structure: 'initialMessages' not found")
+            println(initialMessageList)
+
+
+            val initialMessageString: InitialMessageString = objectMapper.convertValue(
+                initialMessageList.firstOrNull()
+                    ?: throw IllegalArgumentException("No public pre-keys found in response")
+            )
+
             return initialMessageString.toX25519()
         }
+
+
+
+
+//        val requestGet = Request.Builder()
+//            .url("http://localhost:8080/${targetPodId}/initialMessage")
+//            .get()
+//            .build()
+//        client.newCall(requestGet).execute().use { response ->
+//            if (response.code != 200) {
+//                throw RuntimeException("Unexpected response code: ${response.code}, Message: ${response.message}")
+//            }
+//            val responseBody = response.body?.string() ?: throw RuntimeException("Response body was null")
+//            val objectMapper = jacksonObjectMapper()
+//            val initialMessageString = objectMapper.readValue(responseBody, InitialMessageString::class.java)
+//            return initialMessageString.toX25519()
+//        }
     }
 }
