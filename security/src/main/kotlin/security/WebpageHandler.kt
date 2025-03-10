@@ -24,6 +24,9 @@ class MainVerticle : AbstractVerticle() {
         // Serve the HTML page at the root URL
         router.get("/").handler(this::serveHtmlPage)
 
+        // Endpoint to generate new PreKeys
+        router.get("/generatePreKeys").handler(this::generatePreKeys)
+
         // Define the endpoints for X3DH
         router.get("/uploadPreKeys").handler(this::uploadPreKeys)
         router.get("/sendInitialMessage").handler(this::sendInitialMessage)
@@ -96,6 +99,10 @@ class MainVerticle : AbstractVerticle() {
             </head>
             <body>
                 <div class="container">
+                    <div>
+                        <button onclick="generatePreKeys('alice')">Generate Alice's PreKeys</button>
+                        <button onclick="generatePreKeys('bob')">Generate Bob's PreKeys</button>
+                    </div>
                     <div class="top-section">
                         <h1>Communication Pod</h1>
                         <label for="podName">Enter Target Pod Name:</label>
@@ -140,6 +147,13 @@ class MainVerticle : AbstractVerticle() {
                     let aliceInbox = [];
                     let bobInbox = [];
                     let podName = '';
+                    
+                    function generatePreKeys(user) {
+                        fetch('/generatePreKeys?user=' + user)
+                            .then(response => response.json())
+                            .then(data => alert(data.message))
+                            .catch(err => console.error('Error:', err));
+                    }
                     
                     function initializeSlices() {
                         podName = document.getElementById('podName').value;
@@ -259,6 +273,23 @@ class MainVerticle : AbstractVerticle() {
         ctx.response()
             .putHeader("Content-Type", "text/html")
             .end(html)
+    }
+
+    private fun generatePreKeys(ctx: RoutingContext) {
+        val user = ctx.request().getParam("user")
+
+        if (user == "alice") {
+            Alice.preKeys = generatePrekeys()
+            ctx.response().putHeader("Content-Type", "application/json")
+                .end("{\"message\": \"New prekeys generated for Alice\"}")
+        } else if (user == "bob") {
+            Bob.preKeys = generatePrekeys()
+            ctx.response().putHeader("Content-Type", "application/json")
+                .end("{\"message\": \"New prekeys generated for Bob\"}")
+        } else {
+            ctx.response().putHeader("Content-Type", "application/json")
+                .end("{\"message\": \"Invalid user!\"}")
+        }
     }
 
     private fun initializeSlices(ctx: RoutingContext) {

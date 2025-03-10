@@ -29,7 +29,7 @@ object X3DH {
                 },
                 "kss:name": "PreKeys",
                 "kss:description": "Schema for storing public pre-keys",
-                "kss:schema": "type Query { publicPreKeys: [kss_PublicPreKeys!]! initialMessages: [kss_InitialMessage!]! } type kss_PublicPreKeys { id: ID! kss_publicIdentityPreKeyEd25519: String! kss_publicIdentityPreKeyX25519: String! kss_publicSignedPreKey: String! kss_publicOneTimePreKeys: String! kss_preKeySignature: String! } type kss_InitialMessage { id: ID! kss_identityPreKey: String! kss_ephemeralPreKey: String! kss_preKeyIdentifiers: String! kss_initialCiphertext: String! } type Mutation { addPublicPreKeys(publicPreKeys: [PublicPreKeysInput!]!): ID! addInitialMessage(initialMessage: InitialMessageInput!): ID! } input PublicPreKeysInput @class(iri: \"kss:PublicPreKeys\") { id: ID! kss_publicIdentityPreKeyEd25519: String! kss_publicIdentityPreKeyX25519: String! kss_publicSignedPreKey: String! kss_publicOneTimePreKeys: String! kss_preKeySignature: String! } input InitialMessageInput @class(iri: \"kss:InitialMessage\") { id: ID! kss_identityPreKey: String! kss_ephemeralPreKey: String! kss_preKeyIdentifiers: String! kss_initialCiphertext: String! }"
+                "kss:schema": "type Query { publicPreKeys: [kss_PublicPreKeys!]! initialMessages: [kss_InitialMessage!]! } type kss_PublicPreKeys { id: ID! kss_publicIdentityPreKeyEd25519: String! kss_publicIdentityPreKeyX25519: String! kss_publicSignedPreKey: String! kss_publicOneTimePreKeys: String! kss_preKeySignature: String! } type kss_InitialMessage { id: ID! kss_identityPreKey: String! kss_ephemeralPreKey: String! kss_preKeyIdentifiers: String! kss_initialCiphertext: String! } type Mutation { addPublicPreKeys(publicPreKeys: [PublicPreKeysInput!]!): ID! addInitialMessage(initialMessage: [InitialMessageInput!]!): ID! removePublicPreKeys(publicPreKeys: [PublicPreKeysInput!]!): ID! removeInitialMessage(initialMessage: [InitialMessageInput!]!): ID! } input PublicPreKeysInput @class(iri: \"kss:PublicPreKeys\") { id: ID! kss_publicIdentityPreKeyEd25519: String! kss_publicIdentityPreKeyX25519: String! kss_publicSignedPreKey: String! kss_publicOneTimePreKeys: String! kss_preKeySignature: String! } input InitialMessageInput @class(iri: \"kss:InitialMessage\") { id: ID! kss_identityPreKey: String! kss_ephemeralPreKey: String! kss_preKeyIdentifiers: String! kss_initialCiphertext: String! }"
             }
         """.trimIndent()
 
@@ -55,7 +55,22 @@ object X3DH {
     }
 
     fun uploadPreKeys(podId: String, preKeys: X3DHPublicPreKeys, authenticationCode: String) {
-        //deletePreviousPreKeys(podId, authenticationCode)
+        val prevPreKeys = getPublicX3DHKeys(podId, authenticationCode)
+
+        var keysToDelete = ""
+        if (prevPreKeys != null) {
+            keysToDelete = """
+                {
+                "@id": "ex:$podId",
+                "@type": "kss:PublicPreKeys",
+                "kss:publicIdentityPreKeyEd25519": "${Base64.getEncoder().encodeToString(prevPreKeys.publicIdentityPreKeyEd25519.encoded)}",
+                "kss:publicIdentityPreKeyX25519": "${Base64.getEncoder().encodeToString(prevPreKeys.publicIdentityPreKeyX25519.encoded)}",
+                "kss:publicSignedPreKey": "${Base64.getEncoder().encodeToString(prevPreKeys.publicSignedPreKey.encoded)}",
+                "kss:publicOneTimePreKeys": "${Base64.getEncoder().encodeToString(prevPreKeys.publicOneTimePreKeys.encoded)}",
+                "kss:preKeySignature":  "${Base64.getEncoder().encodeToString(prevPreKeys.preKeySignature)}"
+            }
+            """.trimIndent()
+        }
 
         val jsonLd = """
             {
@@ -72,7 +87,7 @@ object X3DH {
                   "kss:publicOneTimePreKeys": "${Base64.getEncoder().encodeToString(preKeys.publicOneTimePreKeys.encoded)}",
                   "kss:preKeySignature":  "${Base64.getEncoder().encodeToString(preKeys.preKeySignature)}"
                 }],
-              "kss:delete": []
+              "kss:delete": [ $keysToDelete ]
             }
             """.trimIndent()
 
@@ -86,6 +101,7 @@ object X3DH {
             .build()
 
         client.newCall(request).execute().use { response ->
+            println(response.code)
             println(response.message)
             if (response.code != 201) {
                 throw RuntimeException("Unexpected response code: ${response.code}, Message: ${response.message}")
@@ -95,7 +111,7 @@ object X3DH {
     }
 
 
-    fun getPublicX3DHKeys(podId: String, authenticationCode: String): X3DHPublicPreKeys {
+    fun getPublicX3DHKeys(podId: String, authenticationCode: String): X3DHPublicPreKeys? {
         val json = """
             { "query": "{ publicPreKeys @filter(if: \"id==http://example.org/$podId\") { id kss_publicIdentityPreKeyEd25519 kss_publicIdentityPreKeyX25519 kss_publicSignedPreKey kss_publicOneTimePreKeys kss_preKeySignature } }" }
             """.trimIndent()
@@ -110,6 +126,8 @@ object X3DH {
             .header("Authorization", "Bearer $authenticationCode")
             .build()
 
+        // Wait 1 second
+        TimeUnit.SECONDS.sleep(1)
 
         client.newCall(requestPost).execute().use { response ->
             if (response.code != 200) {
@@ -126,10 +144,10 @@ object X3DH {
             // Extract "publicPreKeys" list safely
             val publicPreKeys = (keysAsMap.get("data") as? Map<String, Any>)
                 ?.get("publicPreKeys") as? List<Map<String, Any>>
-                ?: throw IllegalArgumentException("Invalid JSON structure: 'publicPreKeys' not found")
+                ?: return null
 
             val X3dhKeysAsString: X3DHPublicKeysAsString = objectMapper.convertValue(publicPreKeys.firstOrNull()
-                ?: throw IllegalArgumentException("No public pre-keys found in response")
+                ?: return null
             )
 
             return X3dhKeysAsString.convertToX25519()
@@ -142,7 +160,12 @@ object X3DH {
         preKeys: X3DHPreKeys,
         authenticationCode: String
     ): ByteArray {
-        val targetPrekeys: X3DHPublicPreKeys = getPublicX3DHKeys(podId, authenticationCode)
+        val targetPrekeys: X3DHPublicPreKeys? = getPublicX3DHKeys(podId, authenticationCode)
+
+        if (targetPrekeys == null) {
+            println("TargetPreKeys were null")
+            throw RuntimeException("TargetPrekeys were null")
+        }
 
         println("keys: $targetPrekeys")
 
@@ -201,6 +224,7 @@ object X3DH {
         /*
             Send the initial message
          */
+
         sendInitialMessageToKvasir(podId, InitialMessage(
             identityPreKey = preKeys.publicIdentityPreKey,
             ephemeralPreKey = ephemeralKeyPair.first,
@@ -218,6 +242,11 @@ object X3DH {
             Fetch the initial message
          */
         val initialMessage = retrieveInitialMessageFromKvasir(podId, authenticationCode)
+
+        if (initialMessage == null) {
+            println("InitialMessage was null")
+            throw RuntimeException("InitialMessage was null")
+        }
 
         println("initMessage: $initialMessage")
 
@@ -247,7 +276,7 @@ object X3DH {
         }
 
         println("check")
-        println("sk2: $sharedKey[0]}")
+        println("sk2: ${sharedKey[0]}")
 
         val associatedData: ByteArray = initialMessage.identityPreKey.encoded + preKeys.publicIdentityPreKey.encoded
 
@@ -270,6 +299,57 @@ object X3DH {
     }
 
     private fun sendInitialMessageToKvasir(targetPodId: String, initialMessage: InitialMessage, authenticationCode: String) {
+
+        val prevInitialMessage = retrieveInitialMessageFromKvasir(targetPodId, authenticationCode)
+
+        //var initialMessageToDelete = ""
+        if (prevInitialMessage != null) {
+            val jsonLdDelete = """
+                {
+                  "@context": {
+                      "kss": "https://kvasir.discover.ilabt.imec.be/vocab#",
+                      "ex": "http://example.org/"
+                  },
+                  "kss:insert": [],
+                  "kss:delete": [ {
+                        "@id": "ex:$targetPodId",
+                        "@type": "kss:InitialMessage",
+                        "kss:identityPreKey": "${Base64.getEncoder().encodeToString(prevInitialMessage.identityPreKey.encoded)}",
+                        "kss:ephemeralPreKey": "${Base64.getEncoder().encodeToString(prevInitialMessage.ephemeralPreKey.encoded)}",
+                        "kss:preKeyIdentifiers": "${prevInitialMessage.preKeyIdentifiers.toString()}",
+                        "kss:initialCiphertext": "${Base64.getEncoder().encodeToString(prevInitialMessage.initialCiphertext)}"
+                    } ]
+                }
+                """.trimIndent()
+
+            val requestBodyDelete = jsonLdDelete.toRequestBody("application/ld+json".toMediaType())
+
+            val requestDelete = Request.Builder()
+                .url("http://localhost:8080/${targetPodId}/slices/PreKeys/changes")
+                .post(requestBodyDelete)
+                .header("Content-Type", "application/ld+json")
+                .header("Authorization", "Bearer $authenticationCode")
+                .build()
+
+            client.newCall(requestDelete).execute().use { response ->
+                println("initmessgaemessage: ${response.message}")
+                println("code: ${response.code}")
+                if (response.code != 201) {
+                    throw RuntimeException("Unexpected response code: ${response.code}, Message: ${response.message}")
+                }
+            }
+//            initialMessageToDelete = """
+//                {
+//                "@id": "ex:$targetPodId",
+//                "@type": "kss:InitialMessage",
+//                "kss:identityPreKey": "${Base64.getEncoder().encodeToString(prevInitialMessage.identityPreKey.encoded)}",
+//                "kss:ephemeralPreKey": "${Base64.getEncoder().encodeToString(prevInitialMessage.ephemeralPreKey.encoded)}",
+//                "kss:preKeyIdentifiers": "${prevInitialMessage.preKeyIdentifiers.toString()}",
+//                "kss:initialCiphertext": "${Base64.getEncoder().encodeToString(prevInitialMessage.initialCiphertext)}"
+//            }
+//            """.trimIndent()
+        }
+
         val jsonLd = """
             {
               "@context": {
@@ -288,6 +368,8 @@ object X3DH {
             }
             """.trimIndent()
 
+        println(jsonLd)
+
         val requestBody = jsonLd.toRequestBody("application/ld+json".toMediaType())
 
         val request = Request.Builder()
@@ -299,6 +381,7 @@ object X3DH {
 
         client.newCall(request).execute().use { response ->
             println("initmessgaemessage: ${response.message}")
+            println("code: ${response.code}")
             if (response.code != 201) {
                 throw RuntimeException("Unexpected response code: ${response.code}, Message: ${response.message}")
             }
@@ -338,7 +421,7 @@ object X3DH {
 //        }
     }
 
-    private fun retrieveInitialMessageFromKvasir(targetPodId: String, authenticationCode: String): InitialMessage {
+    private fun retrieveInitialMessageFromKvasir(targetPodId: String, authenticationCode: String): InitialMessage? {
         val json = """
             { "query": "{ initialMessages @filter(if: \"id==http://example.org/$targetPodId\") { id kss_identityPreKey kss_ephemeralPreKey kss_preKeyIdentifiers kss_initialCiphertext } }" }
             """.trimIndent()
@@ -353,6 +436,7 @@ object X3DH {
             .build()
 
         client.newCall(requestPost).execute().use { response ->
+            println(response.body)
             if (response.code != 200) {
                 throw RuntimeException("Unexpected response code: ${response.code}, Message: ${response.message}")
             }
@@ -363,17 +447,17 @@ object X3DH {
 
             // Deserialize JSON into a generic Map
             val keysAsMap: Map<String, Any> = objectMapper.readValue(responseBody)
-            println(keysAsMap)
+
             // Extract "messages" list safely
             val initialMessageList = (keysAsMap.get("data") as? Map<String, Any>)
                 ?.get("initialMessages") as? List<Map<String, Any>>
-                ?: throw IllegalArgumentException("Invalid JSON structure: 'initialMessages' not found")
+                ?: return null
             println(initialMessageList)
 
 
             val initialMessageString: InitialMessageString = objectMapper.convertValue(
                 initialMessageList.firstOrNull()
-                    ?: throw IllegalArgumentException("No public pre-keys found in response")
+                    ?: return null
             )
 
             return initialMessageString.toX25519()

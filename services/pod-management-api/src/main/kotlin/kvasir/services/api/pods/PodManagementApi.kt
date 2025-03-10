@@ -161,8 +161,7 @@ class PodManagementApi(
                 Uni.createFrom().item(Response.status(Response.Status.NOT_FOUND).build())
             } else {
                 val key = if("http://localhost:8080/$senderPodId" == podId) KvasirVocab.messageOutbox else KvasirVocab.messageInbox
-                val x3dhKeys = existingPod.x3dhKeys
-                    ?: throw NotFoundException("No x3dh keys were defined")
+                val x3dhKeys = existingPod.x3dhKeys ?: mutableMapOf()
                 val updatedMessages: List<EncryptedMessage> = (x3dhKeys[key] as? List<EncryptedMessage>)
                     ?.toMutableList()
                     ?.apply { add(input) }
