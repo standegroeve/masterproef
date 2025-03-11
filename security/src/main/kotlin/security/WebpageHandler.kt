@@ -197,6 +197,8 @@ class MainVerticle : AbstractVerticle() {
 
                     function sendMessage(sender) {
                         const message = sender === 'alice' ? document.getElementById('aliceMessage').value : document.getElementById('bobMessage').value;
+                        let authCode = document.getElementById('authCode').value;
+
                         if (message) {
                             const timestamp = Date.now();
                             
@@ -206,7 +208,7 @@ class MainVerticle : AbstractVerticle() {
                                 bobInbox.push({ sender: sender, content: message, timestamp: timestamp });
                             }
                             
-                            fetch('/sendMessage?pod=' + podName + '&sender=' + sender + '&message=' + encodeURIComponent(message) + '&timestamp=' + timestamp)
+                            fetch('/sendMessage?pod=' + podName + '&sender=' + sender + '&message=' + encodeURIComponent(message) + '&timestamp=' + timestamp + '&authCode=' + authCode)
                                 .then(response => response.json())
                                 .then(data => {
                                     alert(data.message);
@@ -230,7 +232,8 @@ class MainVerticle : AbstractVerticle() {
                     }
                     
                     function retrieveMessages(user) {
-                        fetch('/retrieveMessages?pod=' + podName + '&user=' + user)
+                        let authCode = document.getElementById('authCode').value;
+                        fetch('/retrieveMessages?pod=' + podName + '&user=' + user + '&authCode=' + authCode)
                             .then(response => response.json())
                             .then(data => {
                                 const inbox = user === 'alice' ? aliceInbox : bobInbox;
@@ -362,22 +365,23 @@ class MainVerticle : AbstractVerticle() {
         val message = ctx.request().getParam("message")
         val timestampString = ctx.request().getParam("timestamp")
         val timestampBytes = ByteBuffer.allocate(8).putLong(timestampString.toLong()).array()
+        val authCode = ctx.request().getParam("authCode")
 
         if (targetPodId != null && sender != null && message != null) {
 
             if (isNotInitialized) {
                 if (sender == "alice") {
-                    Alice.sendInitialMessage(targetPodId, message.toByteArray(), timestampBytes)
+                    Alice.sendInitialMessage(targetPodId, message.toByteArray(), timestampBytes, authCode)
                     isNotInitialized = false
                 } else {
-                    Bob.sendInitialMessage(targetPodId, message.toByteArray(), timestampBytes)
+                    Bob.sendInitialMessage(targetPodId, message.toByteArray(), timestampBytes, authCode)
                     isNotInitialized = false
                 }
             } else {
                 if (sender == "alice") {
-                    Alice.sendMessage(targetPodId, message.toByteArray(), timestampBytes)
+                    Alice.sendMessage(targetPodId, message.toByteArray(), timestampBytes, authCode)
                 } else {
-                    Bob.sendMessage(targetPodId, message.toByteArray(), timestampBytes)
+                    Bob.sendMessage(targetPodId, message.toByteArray(), timestampBytes, authCode)
                 }
             }
             ctx.response()
@@ -393,9 +397,10 @@ class MainVerticle : AbstractVerticle() {
     private fun retrieveMessages(ctx: RoutingContext) {
         val targetPodId = ctx.request().getParam("pod")
         val user = ctx.request().getParam("user")
+        val authCode = ctx.request().getParam("authCode")
 
         if (targetPodId != null && user != null) {
-            val messages = if (user == "alice") Alice.receiveMessage(targetPodId) else Bob.receiveMessage(targetPodId)
+            val messages = if (user == "alice") Alice.receiveMessage(targetPodId, authCode) else Bob.receiveMessage(targetPodId, authCode)
 
             ctx.response()
                 .putHeader("Content-Type", "application/json")

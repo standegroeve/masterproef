@@ -15,7 +15,7 @@ import java.util.*
 object messageController {
     private val client = OkHttpClient()
 
-    fun sendMessage(senderPodId: String, targetPodId: String, encryptedMessage: EncryptedMessage) {
+    fun sendMessage(senderPodId: String, targetPodId: String, encryptedMessage: EncryptedMessage, authenticationCode: String) {
         val jsonLd = """
             {
                 "@context": {
@@ -35,6 +35,7 @@ object messageController {
             .url("http://localhost:8080/${targetPodId}/messages?senderPodId=${senderPodId}")
             .put(requestBody)
             .header("Content-Type", "application/ld+json")
+            .header("Authorization", "Bearer $authenticationCode")
             .build()
         client.newCall(request).execute().use { response ->
             if (response.code != 204) {
@@ -43,10 +44,11 @@ object messageController {
         }
     }
 
-    fun retrieveMessages(retrieverPodId: String, targetPodId: String, latestReceivedMessageId: Int, skippedKeys: Map<Int, ByteArray>): List<EncryptedMessage> {
+    fun retrieveMessages(retrieverPodId: String, targetPodId: String, latestReceivedMessageId: Int, skippedKeys: Map<Int, ByteArray>, authenticationCode: String): List<EncryptedMessage> {
         val requestGet = Request.Builder()
             .url("http://localhost:8080/${targetPodId}/messages")
             .get()
+            .header("Authorization", "Bearer $authenticationCode")
             .build()
 
         client.newCall(requestGet).execute().use { response ->
@@ -60,7 +62,7 @@ object messageController {
 
             val responseMap: Map<String, Any> = objectMapper.readValue(responseBody)
 
-            val key = if (retrieverPodId == targetPodId) "kss:messageInboxList" else "kss:messageOutboxList"
+            val key = if (retrieverPodId == targetPodId) "kss:messageInbox" else "kss:messageOutbox"
 
             val encryptedMessageList = responseMap[key]
 

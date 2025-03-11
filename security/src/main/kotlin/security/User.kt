@@ -34,14 +34,14 @@ class User(val podId: String) {
 
     var latestReceivedMessageId = -1
 
-    fun sendInitialMessage(targetPod: String, input: ByteArray, timestampBytes: ByteArray) {
+    fun sendInitialMessage(targetPod: String, input: ByteArray, timestampBytes: ByteArray, authenticationCode: String) {
         DHKeyPair = generateX25519KeyPair()
         val initialDHoutput = DiffieHellman(DHKeyPair!!.second, X25519PublicKeyParameters(initialDHPublicKey))
         sendingKey = KeyRatchet.SymmetricKeyRatchetRoot(this, initialDHoutput)
-        sendMessage(targetPod, input, timestampBytes)
+        sendMessage(targetPod, input, timestampBytes, authenticationCode)
     }
 
-    fun sendMessage(targetPod: String, input: ByteArray, timestampBytes: ByteArray) {
+    fun sendMessage(targetPod: String, input: ByteArray, timestampBytes: ByteArray, authenticationCode: String) {
         val messageId = sentMessageId
         sentMessageId++
 
@@ -58,12 +58,12 @@ class User(val podId: String) {
         val encrpytedMessage = EncryptedMessage(messageId + 1, DHKeyPair!!.first.encoded, ciphertext!!, sequenceNumber, PN)
 
         // sends the message to the pod
-        messageController.sendMessage(podId, targetPod, encrpytedMessage)
+        messageController.sendMessage(podId, targetPod, encrpytedMessage, authenticationCode)
     }
 
-    fun receiveMessage(targetPod: String): List<DecryptedMessage> {
+    fun receiveMessage(targetPod: String, authenticationCode: String): List<DecryptedMessage> {
         // Retreive messages which we havent seen already or whose key isnt in skippedKeys
-        val encryptedMessages = messageController.retrieveMessages(podId, targetPod, latestReceivedMessageId, skippedKeys)
+        val encryptedMessages = messageController.retrieveMessages(podId, targetPod, latestReceivedMessageId, skippedKeys, authenticationCode)
 
         var messagesList = mutableListOf<DecryptedMessage>()
         for (i in 0..encryptedMessages.size-1) {

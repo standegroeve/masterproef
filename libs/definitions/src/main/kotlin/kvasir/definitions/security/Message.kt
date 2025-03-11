@@ -16,9 +16,9 @@ data class EncryptedMessage(
     val prevSequenceNumber: String
 )
 
-data class MessagesLists(
-    @JsonProperty(KvasirVocab.messageInboxList)
-    val messageInboxList: List<EncryptedMessage>,
-    @JsonProperty(KvasirVocab.messageOutboxList)
-    val messageOutboxList: List<EncryptedMessage>
+data class MessageStorage(
+    @JsonProperty(KvasirVocab.messageInbox)
+    val messageInbox: List<EncryptedMessage>,
+    @JsonProperty(KvasirVocab.messageOutbox)
+    val messageOutbox: List<EncryptedMessage>
 )
