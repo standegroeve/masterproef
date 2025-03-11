@@ -9,9 +9,7 @@ import jakarta.ws.rs.NotFoundException
 import kvasir.definitions.rdf.JsonLdKeywords
 import kvasir.definitions.rdf.KvasirVocab
 import kvasir.definitions.security.EncryptedMessage
-import kvasir.definitions.security.InitialMessage
-import kvasir.definitions.security.MessagesLists
-import kvasir.definitions.security.PublicX3DHKeys
+import kvasir.definitions.security.MessageStorage
 
 interface PodStore {
 
@@ -40,8 +38,8 @@ data class Pod(
     val id: String,
     @JsonProperty(KvasirVocab.configuration)
     val configuration: Map<String, Any>,
-    @JsonProperty(KvasirVocab.x3dhKeys)
-    val x3dhKeys: Map<String, Any>? = null
+    @JsonProperty(KvasirVocab.messageStorage)
+    val messageStorage: Map<String, Any>? = null
 ) {
 
     @JsonIgnore
@@ -62,19 +60,12 @@ data class Pod(
     }
 
     @JsonIgnore
-    fun getPreKeys(): PublicX3DHKeys? {
-        val keys = x3dhKeys?.get(KvasirVocab.publicX3DHKeys)
-            ?: throw NotFoundException("X3DH keys not found")
-        return JsonObject(keys as Map<String, Any>).mapTo(PublicX3DHKeys::class.java)
-    }
-
-    @JsonIgnore
-    fun getNewMessages(): MessagesLists {
-        val inBoxMessages = x3dhKeys?.get(KvasirVocab.messageInbox) as? List<*>
-        val outBoxMessages = x3dhKeys?.get(KvasirVocab.messageOutbox) as? List<*>
+    fun getNewMessages(): MessageStorage {
+        val inBoxMessages = messageStorage?.get(KvasirVocab.messageInbox) as? List<*>
+        val outBoxMessages = messageStorage?.get(KvasirVocab.messageOutbox) as? List<*>
         if (inBoxMessages == null && outBoxMessages == null)
             throw NotFoundException("No new messages")
-        return MessagesLists(
+        return MessageStorage(
             (inBoxMessages ?: emptyList<EncryptedMessage>()).map {
                 JsonObject(it as Map<String, Any>).mapTo(EncryptedMessage::class.java)
             },
@@ -83,14 +74,6 @@ data class Pod(
             }
         )
     }
-
-    @JsonIgnore
-    fun getInitialMessage(): InitialMessage? {
-        val message = x3dhKeys?.get(KvasirVocab.initialMessage)
-            ?: throw NotFoundException("InitialMessage not found")
-        return JsonObject(message as Map<String, Any>).mapTo(InitialMessage::class.java)
-    }
-
 }
 
 object PodConfigurationProperty {

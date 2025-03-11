@@ -27,6 +27,9 @@ class MainVerticle : AbstractVerticle() {
         // Endpoint to generate new PreKeys
         router.get("/generatePreKeys").handler(this::generatePreKeys)
 
+        // Define the endpoint to initialize slices schema
+        router.get("/initializeSlices").handler(this::initializeSlices)
+
         // Define the endpoints for X3DH
         router.get("/uploadPreKeys").handler(this::uploadPreKeys)
         router.get("/sendInitialMessage").handler(this::sendInitialMessage)
@@ -37,9 +40,6 @@ class MainVerticle : AbstractVerticle() {
 
         //Define the endpoint to retrieve the messages
         router.get("/retrieveMessages").handler(this::retrieveMessages)
-
-        // Define the endpoint to initialize slices schema
-        router.get("/initializeSlices").handler(this::initializeSlices)
 
         // Create the HTTP server
         vertx.createHttpServer()
@@ -278,6 +278,9 @@ class MainVerticle : AbstractVerticle() {
             .end(html)
     }
 
+    /*
+        Generate new PreKeys
+     */
     private fun generatePreKeys(ctx: RoutingContext) {
         val user = ctx.request().getParam("user")
 
@@ -295,6 +298,9 @@ class MainVerticle : AbstractVerticle() {
         }
     }
 
+    /*
+        Initialize the slices schema for the PreKeys and the InitialMessage
+     */
     private fun initializeSlices(ctx: RoutingContext) {
         val targetPodId = ctx.request().getParam("pod")
         val authCode = ctx.request().getParam("authCode")
@@ -313,6 +319,9 @@ class MainVerticle : AbstractVerticle() {
         }
     }
 
+    /*
+        Upload the new PreKeys
+     */
     private fun uploadPreKeys(ctx: RoutingContext) {
         val targetPodId = ctx.request().getParam("pod")
         val authCode = ctx.request().getParam("authCode")
@@ -328,6 +337,9 @@ class MainVerticle : AbstractVerticle() {
         }
     }
 
+    /*
+        Send the initial message
+     */
     private fun sendInitialMessage(ctx: RoutingContext) {
         val targetPodId = ctx.request().getParam("pod")
         val authCode = ctx.request().getParam("authCode")
@@ -343,6 +355,9 @@ class MainVerticle : AbstractVerticle() {
         }
     }
 
+    /*
+        Process the initial message
+     */
     private fun processInitialMessage(ctx: RoutingContext) {
         val targetPodId = ctx.request().getParam("pod")
         val authCode = ctx.request().getParam("authCode")
@@ -358,7 +373,9 @@ class MainVerticle : AbstractVerticle() {
         }
     }
 
-    // Endpoint to send a message
+    /*
+        Send a new message
+     */
     private fun sendMessage(ctx: RoutingContext) {
         val targetPodId = ctx.request().getParam("pod")
         val sender = ctx.request().getParam("sender")
@@ -394,6 +411,9 @@ class MainVerticle : AbstractVerticle() {
         }
     }
 
+    /*
+        Retrieve new messages
+     */
     private fun retrieveMessages(ctx: RoutingContext) {
         val targetPodId = ctx.request().getParam("pod")
         val user = ctx.request().getParam("user")

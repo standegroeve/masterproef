@@ -21,6 +21,9 @@ import java.util.concurrent.TimeUnit
 object X3DH {
     private val client = OkHttpClient()
 
+    /*
+        Initiates the schema to perform queries and mutations to the publicPreKeys and for the initialMessages
+     */
     fun initiateSliceSchema(podId: String, authenticationCode: String) {
         val jsonLd = """
             {
@@ -54,7 +57,11 @@ object X3DH {
         }
     }
 
+    /*
+        Deletes existing prekeys (if any exist with same podId) and uploads new ones
+     */
     fun uploadPreKeys(podId: String, preKeys: X3DHPublicPreKeys, authenticationCode: String) {
+        // If preKeys already exist with same podId, fetch them
         val prevPreKeys = getPublicX3DHKeys(podId, authenticationCode)
 
         var keysToDelete = ""
@@ -101,8 +108,6 @@ object X3DH {
             .build()
 
         client.newCall(request).execute().use { response ->
-            println(response.code)
-            println(response.message)
             if (response.code != 201) {
                 throw RuntimeException("Unexpected response code: ${response.code}, Message: ${response.message}")
             }
@@ -110,8 +115,10 @@ object X3DH {
         }
     }
 
-
-    fun getPublicX3DHKeys(podId: String, authenticationCode: String): X3DHPublicPreKeys? {
+    /*
+        Fetch the publicX3DHKeys from a pod
+     */
+    private fun getPublicX3DHKeys(podId: String, authenticationCode: String): X3DHPublicPreKeys? {
         val json = """
             { "query": "{ publicPreKeys @filter(if: \"id==http://example.org/$podId\") { id kss_publicIdentityPreKeyEd25519 kss_publicIdentityPreKeyX25519 kss_publicSignedPreKey kss_publicOneTimePreKeys kss_preKeySignature } }" }
             """.trimIndent()
@@ -125,9 +132,6 @@ object X3DH {
             .header("Content-Type", "application/json")
             .header("Authorization", "Bearer $authenticationCode")
             .build()
-
-        // Wait 1 second
-        TimeUnit.SECONDS.sleep(1)
 
         client.newCall(requestPost).execute().use { response ->
             if (response.code != 200) {
@@ -154,6 +158,9 @@ object X3DH {
         }
     }
 
+    /*
+        Do the DH-calculations to make and send the initial message
+     */
     fun sendInitialMessage(
         actor: User,
         podId: String,
@@ -167,15 +174,11 @@ object X3DH {
             throw RuntimeException("TargetPrekeys were null")
         }
 
-        println("keys: $targetPrekeys")
-
         actor.initialDHPublicKey = targetPrekeys.publicSignedPreKey.encoded
         actor.targetPublicKey = targetPrekeys.publicIdentityPreKeyX25519.encoded
         actor.DHKeyPair = generateX25519KeyPair()
-        /*
-            Verifiy signature
-         */
 
+        // Verify the signature
         val verified = xeddsa_verify(
             targetPrekeys.publicIdentityPreKeyEd25519,
             targetPrekeys.publicSignedPreKey.encoded,
@@ -187,9 +190,7 @@ object X3DH {
             throw RuntimeException("Signature Verification failed")
         }
 
-        /*
-            Calculate sharedKey
-         */
+        // Calculate the sharedKey
         val ephemeralKeyPair = generateX25519KeyPair()
 
         val DH1 = DiffieHellman(preKeys.privateIdentityPreKey, targetPrekeys.publicSignedPreKey)
@@ -213,8 +214,8 @@ object X3DH {
         }
 
         /*
-        Generate ciphertext
-     */
+            Generate ciphertext
+         */
         val associatedData: ByteArray =
             preKeys.publicIdentityPreKey.encoded + targetPrekeys.publicIdentityPreKeyX25519.encoded
         val plaintext: ByteArray = "Handshake send initial message".toByteArray()
@@ -224,7 +225,6 @@ object X3DH {
         /*
             Send the initial message
          */
-
         sendInitialMessageToKvasir(podId, InitialMessage(
             identityPreKey = preKeys.publicIdentityPreKey,
             ephemeralPreKey = ephemeralKeyPair.first,
@@ -232,11 +232,13 @@ object X3DH {
             initialCiphertext = ciphertext!!
         ), authenticationCode)
 
-        println("sk1: ${sharedKey[0]}")
-
         return sharedKey
     }
 
+
+    /*
+        Fetch and process the initial message
+     */
     fun processInitialMessage(actor: User, podId: String, preKeys: X3DHPreKeys, authenticationCode: String): ByteArray {
         /*
             Fetch the initial message
@@ -248,8 +250,6 @@ object X3DH {
             throw RuntimeException("InitialMessage was null")
         }
 
-        println("initMessage: $initialMessage")
-
         actor.DHKeyPair = Pair(actor.preKeys!!.publicSignedPrekey, actor.preKeys!!.privateSignedPrekey)
 
         actor.targetPublicKey = initialMessage.identityPreKey.encoded
@@ -257,7 +257,6 @@ object X3DH {
         /*
             Calculate sharedKey
          */
-
         val DH1 = DiffieHellman(preKeys.privateSignedPrekey, initialMessage.identityPreKey)
         val DH2 = DiffieHellman(preKeys.privateIdentityPreKey, initialMessage.ephemeralPreKey)
         val DH3 = DiffieHellman(preKeys.privateSignedPrekey, initialMessage.ephemeralPreKey)
@@ -275,34 +274,28 @@ object X3DH {
             sharedKey = HKDF(salt, F + DH1 + DH2 + DH3 + DH4, info, 32)
         }
 
-        println("check")
-        println("sk2: ${sharedKey[0]}")
 
         val associatedData: ByteArray = initialMessage.identityPreKey.encoded + preKeys.publicIdentityPreKey.encoded
 
         val plaintext = aesGcmDecrypt(initialMessage.initialCiphertext, sharedKey, associatedData)
 
-//        if (plaintext != null) {
-//            actor.preKeys = actor.preKeys?.let {
-//                preKeys.copy(
-//                    publicOneTimePrekeys = it.publicOneTimePrekeys.filterIndexed { index, _ -> index !in initialMessage.preKeyIdentifiers },
-//                    privateOneTimePrekeys = it.privateOneTimePrekeys.filterIndexed { index, _ -> index !in initialMessage.preKeyIdentifiers }
-//                )
-//            }
-//        }
-
-        /*
-            TODO: Update prekeys on server
-         */
+        if (!plaintext.contentEquals("Handshake send initial message".toByteArray())){
+            println("Initial message decryption failed")
+            throw RuntimeException("Initial message decryption failed")
+        }
 
         return sharedKey
     }
 
+    /*
+        Delete initial message (if it already exists with same podId) and send a new one to Kvaisr
+     */
     private fun sendInitialMessageToKvasir(targetPodId: String, initialMessage: InitialMessage, authenticationCode: String) {
 
+        // If an initial message already exist with same podId, fetch it
         val prevInitialMessage = retrieveInitialMessageFromKvasir(targetPodId, authenticationCode)
 
-        //var initialMessageToDelete = ""
+        // If a message already exists with same podId, delete it
         if (prevInitialMessage != null) {
             val jsonLdDelete = """
                 {
@@ -332,24 +325,13 @@ object X3DH {
                 .build()
 
             client.newCall(requestDelete).execute().use { response ->
-                println("initmessgaemessage: ${response.message}")
-                println("code: ${response.code}")
                 if (response.code != 201) {
                     throw RuntimeException("Unexpected response code: ${response.code}, Message: ${response.message}")
                 }
             }
-//            initialMessageToDelete = """
-//                {
-//                "@id": "ex:$targetPodId",
-//                "@type": "kss:InitialMessage",
-//                "kss:identityPreKey": "${Base64.getEncoder().encodeToString(prevInitialMessage.identityPreKey.encoded)}",
-//                "kss:ephemeralPreKey": "${Base64.getEncoder().encodeToString(prevInitialMessage.ephemeralPreKey.encoded)}",
-//                "kss:preKeyIdentifiers": "${prevInitialMessage.preKeyIdentifiers.toString()}",
-//                "kss:initialCiphertext": "${Base64.getEncoder().encodeToString(prevInitialMessage.initialCiphertext)}"
-//            }
-//            """.trimIndent()
         }
 
+        // send a new initial message
         val jsonLd = """
             {
               "@context": {
@@ -368,8 +350,6 @@ object X3DH {
             }
             """.trimIndent()
 
-        println(jsonLd)
-
         val requestBody = jsonLd.toRequestBody("application/ld+json".toMediaType())
 
         val request = Request.Builder()
@@ -380,47 +360,16 @@ object X3DH {
             .build()
 
         client.newCall(request).execute().use { response ->
-            println("initmessgaemessage: ${response.message}")
-            println("code: ${response.code}")
             if (response.code != 201) {
                 throw RuntimeException("Unexpected response code: ${response.code}, Message: ${response.message}")
             }
             return
         }
-
-
-
-//        val jsonLd = """
-//            {
-//                "@context": {
-//                    "kss": "https://kvasir.discover.ilabt.imec.be/vocab#"
-//                },
-//                "kss:identityPreKey": "${Base64.getEncoder().encodeToString(initialMessage.identityPreKey.encoded)}",
-//                "kss:ephemeralPreKey": "${Base64.getEncoder().encodeToString(initialMessage.ephemeralPreKey.encoded)}",
-//                "kss:preKeyIdentifiers": [${
-//                    initialMessage.preKeyIdentifiers.joinToString(", ") {
-//                        "\"${
-//                            it
-//                        }\""
-//                    }
-//                }],
-//                "kss:initialCiphertext": "${Base64.getEncoder().encodeToString(initialMessage.initialCiphertext)}"
-//            }
-//        """.trimIndent()
-//
-//        val requestBody = jsonLd.toRequestBody("application/ld+json".toMediaType())
-//        val request = Request.Builder()
-//            .url("http://localhost:8080/${targetPodId}/initialMessage")
-//            .put(requestBody)
-//            .header("Content-Type", "application/ld+json")
-//            .build()
-//        client.newCall(request).execute().use { response ->
-//            if (response.code != 204) {
-//                throw RuntimeException("Unexpected response code: ${response.code}, Message: ${response.message}")
-//            }
-//        }
     }
 
+    /*
+        Retrieve the initial message from Kvasir
+     */
     private fun retrieveInitialMessageFromKvasir(targetPodId: String, authenticationCode: String): InitialMessage? {
         val json = """
             { "query": "{ initialMessages @filter(if: \"id==http://example.org/$targetPodId\") { id kss_identityPreKey kss_ephemeralPreKey kss_preKeyIdentifiers kss_initialCiphertext } }" }
@@ -436,7 +385,6 @@ object X3DH {
             .build()
 
         client.newCall(requestPost).execute().use { response ->
-            println(response.body)
             if (response.code != 200) {
                 throw RuntimeException("Unexpected response code: ${response.code}, Message: ${response.message}")
             }
@@ -452,7 +400,6 @@ object X3DH {
             val initialMessageList = (keysAsMap.get("data") as? Map<String, Any>)
                 ?.get("initialMessages") as? List<Map<String, Any>>
                 ?: return null
-            println(initialMessageList)
 
 
             val initialMessageString: InitialMessageString = objectMapper.convertValue(
@@ -462,22 +409,5 @@ object X3DH {
 
             return initialMessageString.toX25519()
         }
-
-
-
-
-//        val requestGet = Request.Builder()
-//            .url("http://localhost:8080/${targetPodId}/initialMessage")
-//            .get()
-//            .build()
-//        client.newCall(requestGet).execute().use { response ->
-//            if (response.code != 200) {
-//                throw RuntimeException("Unexpected response code: ${response.code}, Message: ${response.message}")
-//            }
-//            val responseBody = response.body?.string() ?: throw RuntimeException("Response body was null")
-//            val objectMapper = jacksonObjectMapper()
-//            val initialMessageString = objectMapper.readValue(responseBody, InitialMessageString::class.java)
-//            return initialMessageString.toX25519()
-//        }
     }
 }
