@@ -57,19 +57,18 @@ object RDFEncryptionProcessor {
 
                     is List<*> -> {
                         if (value.size == 1) {
-
+                            // Value shouldn't be a list
                             var firstValue = value.first()
                             when (firstValue) {
                                 is Map<*, *> -> {
                                     if (firstValue.containsKey("@value")) {
-                                        // The Item is a normal value
+                                        // The item is a normal value
                                         firstValue = (value.first() as Map<String, Any>)["@value"]
                                     }
                                     else {
                                         // The item is a nested JsonObject
-                                        val map = firstValue["@value"] as Map<String, Any>
                                         val nestedMap = mapOf(
-                                            "@value" to encrypt(map, secretKey, associatedData, predicatesToEncrypt),
+                                            "@value" to encrypt(firstValue as Map<String, Any>, secretKey, associatedData, predicatesToEncrypt),
                                             "predicateHash" to predicateHash
                                         )
                                         encryptedMap.put(Base64.getEncoder().encodeToString(encryptedKey), nestedMap)
@@ -151,34 +150,28 @@ object RDFEncryptionProcessor {
                         )
                         encryptedMap.put(key, valueMap)
                     }
-
                     is List<*> -> {
                         if (value.size == 1) {
                             // Value shouldn't be a list
-                            var listItem: Any?
-                            if (value.contains("@value")) {
-                                // The item is a value
-                                listItem = (value.first() as Map<String, Any>)["@value"]
-                            } else {
-                                // The item is a normal value or a nested JsonObject
-                                listItem = value.first()
-                                // Check if it's a nested JsonObject and do recursion
-                                if (listItem is Map<*, *>) {
-                                    val nestedMap = mapOf(
-                                        "@value" to encrypt(
-                                            listItem as Map<String, Any>,
-                                            secretKey,
-                                            associatedData,
-                                            predicatesToEncrypt
-                                        ),
-                                    )
-                                    encryptedMap.put(key, nestedMap)
-                                    continue
+                            var firstValue = value.first()
+                            when (firstValue) {
+                                is Map<*, *> -> {
+                                    if (firstValue.containsKey("@value")) {
+                                        // The item is a normal value
+                                        firstValue = (value.first() as Map<String, Any>)["@value"]
+                                    }
+                                    else {
+                                        // The item is a nested JsonObject
+                                        val nestedMap = mapOf(
+                                            "@value" to encrypt(firstValue as Map<String, Any>, secretKey, associatedData, predicatesToEncrypt),
+                                        )
+                                        encryptedMap.put(key, nestedMap)
+                                        continue
+                                    }
                                 }
                             }
-
                             val valueMap = mapOf(
-                                "@value" to listItem
+                                "@value" to firstValue
                             )
 
                             encryptedMap.put(key, valueMap)
