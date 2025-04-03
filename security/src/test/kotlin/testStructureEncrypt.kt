@@ -177,8 +177,10 @@ class transformTests() {
               "ex:hasName": "John Doe",
               "ex:hasAge": 30,
               "ex:address": {
+                "@id": "address_id",
                 "ex:street": "123 Main St",
                 "ex:city": {
+                  "@id": "city_id",
                   "ex:name": "Springfield",
                   "ex:state": "Illinois"
                 }
@@ -203,6 +205,8 @@ class transformTests() {
         val expandedMap = (JsonLdProcessor.expand(map)[0]) as Map<String, Any>
 
         val encryptedMap = RDFEncryptionProcessor.encrypt(expandedMap, randomKey.encoded, associatedData, predicatesToEncrypt)
+
+        val transformedMap = RDFEncryptionProcessor.objectTransform(encryptedMap)["transformedMap"]
 
         val a = 2
     }

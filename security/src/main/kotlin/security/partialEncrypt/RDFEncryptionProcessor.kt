@@ -32,7 +32,6 @@ object RDFEncryptionProcessor {
         for (key in jsonMap.keys) {
             if (key.equals("@value")) return jsonMap
 
-
             if (predicatesToEncrypt.contains(key)) {
                 // Predicate should be encrypted
                 val value = jsonMap[key]
@@ -97,17 +96,24 @@ object RDFEncryptionProcessor {
 
                             for (listItem in value) {
                                 when (listItem) {
-                                    // Item in the list is a nested JsonObject
+                                    // Item in the list is a nested JsonObject or a string inside a map
                                     is Map<*, *> -> {
-                                        val nestedMap = encrypt(
-                                            listItem as Map<String, Any>,
-                                            secretKey,
-                                            associatedData,
-                                            predicatesToEncrypt
-                                        )
+                                        var newListItem: Any? = null
+                                        if (listItem["@value"] is String) {
+                                            // Item in the list is a string inside a map
+                                            newListItem = listItem["@value"]
+                                        }
+                                        else {
+                                            newListItem = encrypt(
+                                                listItem as Map<String, Any>,
+                                                secretKey,
+                                                associatedData,
+                                                predicatesToEncrypt
+                                            )
+                                        }
                                         list.add(
                                             mapOf(
-                                                "@value" to nestedMap
+                                                "@value" to newListItem!!
                                             )
                                         )
                                     }
@@ -215,5 +221,339 @@ object RDFEncryptionProcessor {
             }
         }
         return encryptedMap
+    }
+
+    private fun makeBlankNodeReference(currentChar: Char, encryptionContainer: EncryptionContainer): Map<String, Any> {
+        return mapOf(
+                "renc:encNLabel" to encryptionContainer.toString()
+            )
+    }
+
+    private fun makeReificationQuad(currentReificationNumber: Int, subject: String, encryptedPredicate: String, predicateHash: String, objectValue: Any): Map<String, Any> {
+        val predicateEC = EncryptionContainer(
+            `@value` = encryptedPredicate,
+            renc_datatype = "http://www.w3.org/2001/XMLSchema#string",
+            renc_hash = predicateHash
+        )
+
+        return mapOf(
+            "@id" to "ex:reificationQuad$currentReificationNumber",
+            "rdf:type" to "rdf:Statement",
+            "rdf:subject" to subject,
+            "rdf:predicate" to "renc:encPredicate",
+            "rdf:object" to objectValue,
+            "renc:encPLabel" to predicateEC.toString()
+        )
+    }
+
+
+    fun objectTransform(jsonMap: Map<String, Any>, currentChar: Char = 'A', currentReificationNumber: Int = 1,  references: Map<String, Any> = emptyMap()): Map<String, Any> {
+        val transformedMap = mutableMapOf<String, Any>()
+        var nextChar = currentChar
+        var nextReificationNumber = currentReificationNumber
+        var updatedReferences = references.toMutableMap()
+
+
+
+        for (key in jsonMap.keys) {
+            if (jsonMap.keys.size == 1 && jsonMap.containsKey("@value") && jsonMap["@value"] is String)
+                return mapOf(
+                    "transformedMap" to jsonMap,
+                    "nextChar" to nextChar,
+                    "nextReificationNumber" to nextReificationNumber,
+                    "updatedReferences" to updatedReferences
+            )
+
+            val value = jsonMap[key] as Map<String, Any>
+
+            val subject = (jsonMap["@id"] as Map<String, Any>)["@value"] as String
+
+            if (value.containsKey("EncryptionContainer")) {
+                // Object is encrypted and maybe also the predicate
+
+                // Handle object transform
+                val EC = value["EncryptionContainer"] as EncryptionContainer
+
+                var blankNodeReference: Any? = null
+
+                // Check if blankNode was already previously made
+                if (references.containsKey(EC.renc_hash)) {
+                    blankNodeReference = (references[EC.renc_hash] as Map<String, Any>).values.first()
+                }
+                else {
+                    blankNodeReference = makeBlankNodeReference(nextChar, EC)
+                }
+
+                transformedMap.put("_:$nextChar", blankNodeReference!!)
+                val newObjectValue = mapOf("@id" to "_:$nextChar")
+                updatedReferences.put(EC.renc_hash, mapOf("_:$nextChar" to blankNodeReference))
+                nextChar++
+
+                // Check if predicate is encrypted
+                if (value.containsKey("predicateHash")) {
+                    // Predicate is encrypted
+
+                    // Handle predicate transform
+                    val predicateHash = value["predicateHash"] as String
+                    var reificationQuad: Any? = null
+
+                    // Check if reificationQuad was already previously made
+                    if (references.containsKey(predicateHash)) {
+                        val originalReificationQuad = (references[predicateHash] as Map<String, Any>).values.first() as Map<String, Any>
+                        reificationQuad = originalReificationQuad.toMutableMap() // Creates copy of the reificationQuad
+                        reificationQuad.put("rdf:object", newObjectValue)
+                    }
+                    else {
+                        reificationQuad = makeReificationQuad(nextReificationNumber, subject, key, predicateHash, newObjectValue)
+                    }
+
+                    transformedMap.put("renc:encPredicate$nextReificationNumber", "ex:reificationQuad$nextReificationNumber")
+                    transformedMap.put("ex:reificationQuad$nextReificationNumber", reificationQuad)
+                    updatedReferences.put(predicateHash, mapOf("ex:reificationQuad$nextReificationNumber" to reificationQuad))
+                    nextReificationNumber++
+                }
+                else {
+                    // Predicate is not encrypted
+                    transformedMap.put(key, newObjectValue)
+                }
+            }
+            else {
+                val valueObject = value["@value"]
+                if (value.containsKey("predicateHash")) {
+                    val predicateHash = value["predicateHash"] as String
+                    // The predicate is encrypted (and maybe the object is encrypted and inside a list)
+                    when(valueObject) {
+                        is String -> {
+                            // The valueObject is a string
+                            val reificationQuad = makeReificationQuad(nextReificationNumber, subject, key, predicateHash, valueObject)
+                            transformedMap.put("renc:encPredicate$nextReificationNumber", "ex:reificationQuad$nextReificationNumber")
+                            transformedMap.put("ex:reificationQuad$nextReificationNumber", reificationQuad)
+                            updatedReferences.put(predicateHash, mapOf("ex:reificationQuad$nextReificationNumber" to reificationQuad))
+                            nextReificationNumber++
+                        }
+                        is Map<*, *> -> {
+                            // The valueObject is a nested Json so a Map<String, Any>, recursion is needed
+                            val recursionMap = objectTransform(valueObject as Map<String, Any>, nextChar, nextReificationNumber, updatedReferences)
+                            val nestedMap = recursionMap["transformedMap"] as MutableMap<String, Any>
+                            val updatedChar = recursionMap["nextChar"] as Char
+                            val updatedReificationNumber = recursionMap["nextReificationNumber"] as Int
+                            updatedReferences = recursionMap["updatedReferences"] as MutableMap<String, Any>
+
+                            // Handle created blankNodeReferences in recursion
+                            for (i in updatedChar - nextChar downTo 1) {
+                                transformedMap.put("_:$nextChar", nestedMap["_:$nextChar"]!!)
+                                nestedMap.remove("_:$nextChar")
+                                nextChar++
+                            }
+                            // Handle created reificationQuads in recursion
+                            for (i in updatedReificationNumber - nextReificationNumber downTo 1) {
+                                transformedMap.put("ex:reificationQuad$nextReificationNumber", nestedMap["ex:reificationQuad$nextReificationNumber"]!!)
+                                nestedMap.remove("ex:reificationQuad$nextReificationNumber")
+                                nextReificationNumber++
+                            }
+
+                            val reificationQuad = makeReificationQuad(nextReificationNumber, subject, key, predicateHash, nestedMap)
+                            transformedMap.put("renc:encPredicate$nextReificationNumber", "ex:reificationQuad$nextReificationNumber")
+                            transformedMap.put("ex:reificationQuad$nextReificationNumber", reificationQuad)
+                            updatedReferences.put(predicateHash, mapOf("ex:reificationQuad$nextReificationNumber" to reificationQuad))
+                            nextReificationNumber++
+
+                            transformedMap.put(key, reificationQuad)
+                        }
+                        is List<*> -> {
+                            // The valueObject is a List containing a Map<String, Any>
+                            val firstValue = (valueObject[0] as Map<String, Any>)["@value"]
+                            when (firstValue) {
+                                is String -> {
+                                    // The list contains unencrypted strings
+                                    val reificationQuad = makeReificationQuad(nextReificationNumber, subject, key, predicateHash, valueObject)
+                                    transformedMap.put("renc:encPredicate$nextReificationNumber", "ex:reificationQuad$nextReificationNumber")
+                                    transformedMap.put("ex:reificationQuad$nextReificationNumber", reificationQuad)
+                                    updatedReferences.put(predicateHash, mapOf("ex:reificationQuad$nextReificationNumber" to reificationQuad))
+                                    nextReificationNumber++
+                                }
+                                is EncryptionContainer -> {
+                                    // The list contains encrypted Objects
+
+                                    val transformedList = mutableListOf<Map<String, Any>>()
+
+                                    for (item in valueObject) {
+                                        val EC = (item as Map<String, Any>)["@value"] as EncryptionContainer
+
+                                        var blankNodeReference: Any? = null
+
+                                        // Check if blankNode was already previously made
+                                        if (references.containsKey(EC.renc_hash)) {
+                                            blankNodeReference = (references[EC.renc_hash] as Map<String, Any>).values.first()
+                                        }
+                                        else {
+                                            blankNodeReference = makeBlankNodeReference(nextChar, EC)
+                                        }
+
+                                        transformedMap.put("_:$nextChar", blankNodeReference!!)
+                                        val newObjectValue = mapOf("@id" to "_:$nextChar")
+                                        updatedReferences.put(EC.renc_hash, mapOf("_:$nextChar" to blankNodeReference))
+                                        nextChar++
+
+                                        transformedList.add(
+                                            mapOf("@value" to mapOf("@id" to newObjectValue))
+                                        )
+                                    }
+
+                                    val reificationQuad = makeReificationQuad(nextReificationNumber, subject, key, predicateHash, transformedList)
+                                    transformedMap.put("renc:encPredicate$nextReificationNumber", "ex:reificationQuad$nextReificationNumber")
+                                    transformedMap.put("ex:reificationQuad$nextReificationNumber", reificationQuad)
+                                    updatedReferences.put(predicateHash, mapOf("ex:reificationQuad$nextReificationNumber" to reificationQuad))
+                                    nextReificationNumber++
+                                }
+                                is Map<*, *> -> {
+                                    // The list contains nested JsonMaps so recursion is needed
+
+                                    val transformedList = mutableListOf<Map<String, Any>>()
+
+                                    for (item in valueObject) {
+                                        val itemValue = (item as Map<String, Any>)["@value"] as Map<String, Any>
+                                        val recursionMap = objectTransform(itemValue, nextChar, nextReificationNumber, updatedReferences)
+                                        val nestedMap = recursionMap["transformedMap"] as MutableMap<String, Any>
+                                        val updatedChar = recursionMap["nextChar"] as Char
+                                        val updatedReificationNumber = recursionMap["nextReificationNumber"] as Int
+                                        updatedReferences = recursionMap["updatedReferences"] as MutableMap<String, Any>
+
+                                        // Handle created blankNodeReferences in recursion
+                                        for (i in updatedChar - nextChar downTo 1) {
+                                            transformedMap.put("_:$nextChar", nestedMap["_:$nextChar"]!!)
+                                            nestedMap.remove("_:$nextChar")
+                                            nextChar++
+                                        }
+                                        // Handle created reificationQuads in recursion
+                                        for (i in updatedReificationNumber - nextReificationNumber downTo 1) {
+                                            transformedMap.put("ex:reificationQuad$nextReificationNumber", nestedMap["ex:reificationQuad$nextReificationNumber"]!!)
+                                            nestedMap.remove("ex:reificationQuad$nextReificationNumber")
+                                            nextReificationNumber++
+                                        }
+
+                                        transformedList.add(mapOf("@value" to nestedMap))
+                                    }
+
+                                    val reificationQuad = makeReificationQuad(nextReificationNumber, subject, key, predicateHash, transformedList)
+                                    transformedMap.put("renc:encPredicate$nextReificationNumber", "ex:reificationQuad$nextReificationNumber")
+                                    transformedMap.put("ex:reificationQuad$nextReificationNumber", reificationQuad)
+                                    updatedReferences.put(predicateHash, mapOf("ex:reificationQuad$nextReificationNumber" to reificationQuad))
+                                    nextReificationNumber++
+                                }
+                            }
+                        }
+                    }
+                }
+                else {
+                    // Nothing is encrypted
+                    when (valueObject) {
+                        is String -> {
+                            // The valueObject is a String
+                            transformedMap.put(key, value)
+                        }
+                        is Map<*, *> -> {
+                            // The valueObject is a nested Json so a Map<String, Any>, recursion is needed
+                            val recursionMap = objectTransform(valueObject as Map<String, Any>, nextChar, nextReificationNumber, updatedReferences)
+                            val nestedMap = recursionMap["transformedMap"] as MutableMap<String, Any>
+                            val updatedChar = recursionMap["nextChar"] as Char
+                            val updatedReificationNumber = recursionMap["nextReificationNumber"] as Int
+                            updatedReferences = recursionMap["updatedReferences"] as MutableMap<String, Any>
+
+                            // Handle created blankNodeReferences in recursion
+                            for (i in updatedChar - nextChar downTo 1) {
+                                transformedMap.put("_:$nextChar", nestedMap["_:$nextChar"]!!)
+                                nestedMap.remove("_:$nextChar")
+                                nextChar++
+                            }
+                            // Handle created reificationQuads in recursion
+                            for (i in updatedReificationNumber - nextReificationNumber downTo 1) {
+                                transformedMap.put("ex:reificationQuad$nextReificationNumber", nestedMap["ex:reificationQuad$nextReificationNumber"]!!)
+                                nestedMap.remove("ex:reificationQuad$nextReificationNumber")
+                                nextReificationNumber++
+                            }
+
+                            transformedMap.put(key, nestedMap)
+                        }
+                        is List<*> -> {
+                            // The valueObject is a List containing a Map<String, Any>
+                            val firstValue = (valueObject[0] as Map<String, Any>)["@value"]
+                            when (firstValue) {
+                                is String -> {
+                                    // The list contains unencrypted strings
+                                    transformedMap.put(key, value)
+                                }
+                                is EncryptionContainer -> {
+                                    // The list contains encrypted Objects
+                                    val transformedList = mutableListOf<Map<String, Any>>()
+
+                                    for (item in valueObject) {
+                                        val EC = (item as Map<String, Any>)["@value"] as EncryptionContainer
+
+                                        var blankNodeReference: Any? = null
+
+                                        // Check if blankNode was already previously made
+                                        if (references.containsKey(EC.renc_hash)) {
+                                            blankNodeReference = transformedMap[references[EC.renc_hash]]
+                                        }
+                                        else {
+                                            blankNodeReference = makeBlankNodeReference(nextChar, EC)
+                                        }
+
+                                        transformedMap.put("_:$nextChar", blankNodeReference!!)
+                                        val newObjectValue = mapOf("@id" to "_:$nextChar")
+                                        updatedReferences.put(EC.renc_hash, "_:$nextChar")
+                                        nextChar++
+
+                                        transformedList.add(
+                                            mapOf("@value" to mapOf("@id" to newObjectValue))
+                                        )
+                                    }
+
+                                    transformedMap.put(key, transformedList)
+                                }
+                                is Map<*, *> -> {
+                                    // The list contains nested JsonMaps so recursion is needed
+                                    val transformedList = mutableListOf<Map<String, Any>>()
+
+                                    for (item in valueObject) {
+                                        val itemValue = (item as Map<String, Any>)["@value"] as Map<String, Any>
+                                        val recursionMap = objectTransform(itemValue, nextChar, nextReificationNumber, updatedReferences)
+                                        val nestedMap = recursionMap["transformedMap"] as MutableMap<String, Any>
+                                        val updatedChar = recursionMap["nextChar"] as Char
+                                        val updatedReificationNumber = recursionMap["nextReificationNumber"] as Int
+                                        updatedReferences = recursionMap["updatedReferences"] as MutableMap<String, Any>
+
+                                        // Handle created blankNodeReferences in recursion
+                                        for (i in updatedChar - nextChar downTo 1) {
+                                            transformedMap.put("_:$nextChar", nestedMap["_:$nextChar"]!!)
+                                            nestedMap.remove("_:$nextChar")
+                                            nextChar++
+                                        }
+                                        // Handle created reificationQuads in recursion
+                                        for (i in updatedReificationNumber - nextReificationNumber downTo 1) {
+                                            transformedMap.put("ex:reificationQuad$nextReificationNumber", nestedMap["ex:reificationQuad$nextReificationNumber"]!!)
+                                            nestedMap.remove("ex:reificationQuad$nextReificationNumber")
+                                            nextReificationNumber++
+                                        }
+
+                                        transformedList.add(mapOf("@value" to nestedMap))
+                                    }
+
+                                    transformedMap.put(key, transformedList)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return mapOf(
+            "transformedMap" to transformedMap,
+            "nextChar" to nextChar,
+            "nextReificationNumber" to nextReificationNumber,
+            "updatedReferences" to updatedReferences
+        )
     }
 }
