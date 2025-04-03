@@ -29,8 +29,11 @@ object RDFEncryptionProcessor {
     fun encrypt(jsonMap: Map<String, Any>, secretKey: ByteArray, associatedData: ByteArray, predicatesToEncrypt: List<String>): Map<String, Any> {
         val encryptedMap = mutableMapOf<String, Any>()
 
+        if (jsonMap.keys.size == 1 && jsonMap.containsKey("@value") && jsonMap["@value"] is String)
+            return jsonMap
+
+
         for (key in jsonMap.keys) {
-            if (key.equals("@value")) return jsonMap
 
             if (predicatesToEncrypt.contains(key)) {
                 // Predicate should be encrypted
@@ -253,20 +256,34 @@ object RDFEncryptionProcessor {
         var nextReificationNumber = currentReificationNumber
         var updatedReferences = references.toMutableMap()
 
+        if (jsonMap.keys.size == 1 && jsonMap.containsKey("@value") && jsonMap["@value"] is String)
+            return mapOf(
+                "transformedMap" to jsonMap,
+                "nextChar" to nextChar,
+                "nextReificationNumber" to nextReificationNumber,
+                "updatedReferences" to updatedReferences
+            )
 
+        val subject = (jsonMap["@id"] as Map<String, Any>)["@value"] as String
+
+        if (references.containsKey(subject)) {
+            // Handle subject transformation
+
+
+
+            return mapOf(
+                "transformedMap" to transformedMap,
+                "nextChar" to nextChar,
+                "nextReificationNumber" to nextReificationNumber,
+                "updatedReferences" to updatedReferences
+            )
+        }
 
         for (key in jsonMap.keys) {
-            if (jsonMap.keys.size == 1 && jsonMap.containsKey("@value") && jsonMap["@value"] is String)
-                return mapOf(
-                    "transformedMap" to jsonMap,
-                    "nextChar" to nextChar,
-                    "nextReificationNumber" to nextReificationNumber,
-                    "updatedReferences" to updatedReferences
-            )
+
 
             val value = jsonMap[key] as Map<String, Any>
 
-            val subject = (jsonMap["@id"] as Map<String, Any>)["@value"] as String
 
             if (value.containsKey("EncryptionContainer")) {
                 // Object is encrypted and maybe also the predicate
