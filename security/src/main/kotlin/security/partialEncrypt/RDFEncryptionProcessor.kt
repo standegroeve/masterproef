@@ -32,6 +32,17 @@ object RDFEncryptionProcessor {
         if (jsonMap.keys.size == 1 && jsonMap.containsKey("@value") && jsonMap["@value"] is String)
             return jsonMap
 
+        if (predicatesToEncrypt.contains(jsonMap["@id"])) {
+            val encryptedObject = aesGcmEncrypt(jsonMap.toString().toByteArray(), secretKey, associatedData)
+            return mapOf(
+                "@id" to mapOf("@value" to jsonMap["@id"]),
+                "EncryptedSubject" to EncryptionContainer(
+                    `@value` = Base64.getEncoder().encodeToString(encryptedObject),
+                    renc_datatype = "http://www.w3.org/2001/XMLSchema#string",
+                    renc_hash = sha256Hash(jsonMap.toString()),
+                )
+            )
+        }
 
         for (key in jsonMap.keys) {
 
@@ -266,9 +277,16 @@ object RDFEncryptionProcessor {
 
         val subject = (jsonMap["@id"] as Map<String, Any>)["@value"] as String
 
-        if (references.containsKey(subject)) {
+        if (jsonMap.containsKey("EncryptedSubject")) {
             // Handle subject transformation
 
+            val EC = jsonMap["EncryptedSubject"] as EncryptionContainer
+
+            val blankNodeReference = makeBlankNodeReference(nextChar, EC)
+
+            transformedMap.put("@id", "_:$nextChar")
+            transformedMap.put("_:$nextChar", blankNodeReference)
+            nextChar++
 
 
             return mapOf(
