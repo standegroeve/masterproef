@@ -13,14 +13,20 @@ class testEncryptionProcessor() {
     val valuesToEncryptModel = ModelFactory.createDefaultModel()
     val groupsToEncryptModel = ModelFactory.createDefaultModel()
 
+    val randomKey = generateX25519KeyPair().first
+    val associatedData = ByteArray(16)
+
+
     @BeforeAll
     fun setup() {
+
+
         val valuesToEncryptJsonString = """
             {
                 "@context": {
-                    "ex": "https://example.org/",
-                    "rdf": "https://www.w3.org/1999/02/22-rdf-syntax-ns#",
-                    "renc": "https://www.w3.org/ns/renc#"
+                    "ex": "http://example.org/",
+                    "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+                    "renc": "http://www.w3.org/ns/renc#"
                 },
                 "@id": "ex:encryptionValues",
                 "ex:valuesToEncrypt": [
@@ -34,9 +40,9 @@ class testEncryptionProcessor() {
         val tripleGroupsToEncryptString = """
             {
                 "@context": {
-                    "ex": "https://example.org/",
-                    "rdf": "https://www.w3.org/1999/02/22-rdf-syntax-ns#",
-                    "renc": "https://www.w3.org/ns/renc#"
+                    "ex": "http://example.org/",
+                    "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+                    "renc": "http://www.w3.org/ns/renc#"
                 },
                 "@graph": [
                     {
@@ -60,15 +66,13 @@ class testEncryptionProcessor() {
 
     @Test
     fun testEncryptRDF() {
-        val (randomKey, _) = generateX25519KeyPair()
-        val associatedData = ByteArray(16)
 
         val jsonString = """
             {
               "@context": { 
-                "ex": "https://example.org/",
-                "rdf": "https://www.w3.org/1999/02/22-rdf-syntax-ns#",
-                "renc": "https://www.w3.org/ns/renc#"
+                "ex": "http://example.org/",
+                "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+                "renc": "http://www.w3.org/ns/renc#"
               },
               "@id": "ex:person1",
               "@type": "ex:Person",
@@ -100,8 +104,8 @@ class testEncryptionProcessor() {
             }
             """.trimIndent()
 
-        val encryptionConfigRes = valuesToEncryptModel.getResource("https://example.org/encryptionValues")
-        val propertyToEncrypt = valuesToEncryptModel.getProperty("https://example.org/valuesToEncrypt")
+        val encryptionConfigRes = valuesToEncryptModel.getResource("http://example.org/encryptionValues")
+        val propertyToEncrypt = valuesToEncryptModel.getProperty("http://example.org/valuesToEncrypt")
 
         val valuesToEncryptList = valuesToEncryptModel.listObjectsOfProperty(encryptionConfigRes, propertyToEncrypt)
             .toList()
@@ -118,4 +122,63 @@ class testEncryptionProcessor() {
 
         val a = 2
     }
+
+    @Test
+    fun testDecryptRDF() {
+        val jsonString = """
+            {
+              "@context": { 
+                "ex": "http://example.org/",
+                "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+                "renc": "http://www.w3.org/ns/renc#"
+              },
+              "@id": "ex:person1",
+              "@type": "ex:Person",
+              "ex:hasName": "John Doe",
+              "ex:hasAge": 30,
+              "ex:address": {
+                "@id": "ex:address_id",
+                "ex:street": "123 Main St",
+                "ex:city": {
+                  "@id": "ex:city_id",
+                  "ex:name": "Springfield",
+                  "ex:state": "Illinois",
+                   "ex:aaaa": "ex:test2"
+                }
+              },
+              "ex:hasChildren": [
+                {
+                  "@id": "ex:child1",
+                  "ex:hasName": "Jane Doe",
+                  "ex:hasAge": "10"
+                },
+                {
+                  "@id": "ex:child2",
+                  "ex:hasName": "Jack Doe",
+                  "ex:hasAge": "7"
+                }
+              ],
+              "ex:test": [ "ex:test2", "testfdsqfdf" ]
+            }
+            """.trimIndent()
+
+        val encryptionConfigRes = valuesToEncryptModel.getResource("http://example.org/encryptionValues")
+        val propertyToEncrypt = valuesToEncryptModel.getProperty("http://example.org/valuesToEncrypt")
+
+        val valuesToEncryptList = valuesToEncryptModel.listObjectsOfProperty(encryptionConfigRes, propertyToEncrypt)
+            .toList()
+            .map { it.asResource().uri }
+
+
+
+        val tripleGroupsToEncrypt = groupsToEncryptModel.listStatements().toList()
+            .groupBy { it.subject }
+            .values.toList()
+
+
+        val toDecrypt = RDFEncryptionProcessor.encryptRDF(jsonString, randomKey.encoded, associatedData, valuesToEncryptList, tripleGroupsToEncrypt)
+
+        RDFEncryptionProcessor.decryptRDF(toDecrypt, randomKey.encoded, associatedData)
+    }
+
 }

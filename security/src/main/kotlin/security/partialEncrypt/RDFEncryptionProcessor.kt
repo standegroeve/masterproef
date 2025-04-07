@@ -1,12 +1,13 @@
 package security.partialEncrypt
 
+import com.fasterxml.jackson.annotation.JsonProperty
+import com.fasterxml.jackson.databind.ser.Serializers.Base
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.apache.jena.datatypes.xsd.XSDDatatype
 import org.apache.jena.query.*
-import org.apache.jena.rdf.model.ModelFactory
-import org.apache.jena.rdf.model.Property
-import org.apache.jena.rdf.model.RDFNode
-import org.apache.jena.rdf.model.Statement
+import org.apache.jena.rdf.model.*
 import org.apache.jena.update.UpdateAction
+import security.crypto.aesGcmDecrypt
 import security.crypto.aesGcmEncrypt
 import java.io.StringReader
 import java.io.StringWriter
@@ -14,12 +15,23 @@ import java.security.MessageDigest
 import java.util.*
 
 data class EC(
-    val `@value`: String,
-    val renc_datatype: String,
-    // val renc_hash: String
+    @JsonProperty("@value") val `@value`: String,
+    @JsonProperty("renc_datatype") val renc_datatype: String
 ) {
     override fun toString(): String {
-        return  "@value=$`@value`, renc_datatype=$renc_datatype"
+        return "@value=$`@value`, renc_datatype=$renc_datatype"
+    }
+
+    companion object {
+        // Function to parse JSON string into EC object
+        fun fromCustomString(data: String): EC {
+            val map = data.split(", ")
+                .associate {
+                    val (key, value) = it.split("=", limit = 2)
+                    key to value
+                }
+            return EC(map["@value"] ?: "", map["renc_datatype"] ?: "")
+        }
     }
 }
 
@@ -36,10 +48,41 @@ object RDFEncryptionProcessor {
 
 
     fun encryptRDF(jsonString: String, secretKey: ByteArray, associatedData: ByteArray, valuesToEncrypt: List<String>, tripleGroupsToEncrypt: List<List<Statement>>): String {
-        model.read(StringReader(jsonString), null, "JSON-LD")
+        model.read(StringReader(jsonString), "http://example.org/", "JSON-LD")
 
         var currentChar = 'A'
         var currentReificationNumber = 1
+
+        //////////////////////////////////
+        // Handle triple set encryption //
+        //////////////////////////////////
+
+        for (group in tripleGroupsToEncrypt) {
+            val queryHelper = StringBuilder()
+
+            group.joinToString("\n") { stmt ->
+                queryHelper.append("<${stmt.subject}> <${stmt.predicate}> \"${stmt.`object`}\" .\n")
+            }
+            if (queryHelper.isNotEmpty()) {
+                queryHelper.setLength(queryHelper.length - 1)  // Remove the last character (newline)
+            }
+
+            val valueToEncrypt = queryHelper.toString()
+            val encryptedValue = aesGcmEncrypt(valueToEncrypt.toByteArray(), secretKey, associatedData)
+
+            val ECString = EC(
+                `@value` = Base64.getEncoder().encodeToString(encryptedValue),
+                renc_datatype = "rdf:Resource"
+            ).toString()
+
+            model.add(model.createResource("_:$currentChar"), model.createProperty("renc:encTriples"), model.createLiteral(ECString))
+            model.add(group.first().subject, model.createProperty("renc:triples"), model.createLiteral("_:$currentChar"))
+            model.add(group.first().subject, model.createProperty("http://www.w3.org/ns/renc#triples"), model.createLiteral("_:$currentChar"))
+
+            model.remove(group)
+
+            currentChar++
+        }
 
         for (value in valuesToEncrypt) {
 
@@ -49,8 +92,8 @@ object RDFEncryptionProcessor {
 
 
             val selectQueryPred = """
-                    PREFIX ex: <https://example.org/>
-                    PREFIX renc: <https://www.w3.org/ns/renc#>
+                    PREFIX ex: <http://example.org/>
+                    PREFIX renc: <http://www.w3.org/ns/renc#>
                     SELECT ?o
                     WHERE {
                         ?s <$value> ?o .
@@ -72,17 +115,37 @@ object RDFEncryptionProcessor {
 
                 val encryptedPredicate = aesGcmEncrypt(value.toString().toByteArray(), secretKey, associatedData)
 
-
                 val updateQuery = """
-                        PREFIX ex: <https://example.org/>
-                        PREFIX renc: <https://www.w3.org/ns/renc#>
+                        PREFIX ex: <http://example.org/>
+                        PREFIX renc: <http://www.w3.org/ns/renc#>
                         DELETE { ?s <$value> "$objectValue" }
-                        INSERT { ?s <$value> "ex:reificationQuad$currentReificationNumber" }
+                        INSERT { ?s renc:encPredicate ex:reificationQuad$currentReificationNumber }
 
                         WHERE {
                             ?s <$value> "$objectValue" .
                         }
                     """.trimIndent()
+
+
+                val testQuery = """
+                        PREFIX ex: <http://example.org/>
+                        PREFIX renc: <http://www.w3.org/ns/renc#>
+                        SELECT ?s ?o
+                        WHERE {
+                            ?s <$value> "$objectValue" .
+                        }
+                    """.trimIndent()
+
+                val testQueryexec: QueryExecution = QueryExecutionFactory.create(testQuery, model)
+                val resultstest: ResultSet = testQueryexec.execSelect()
+
+                val resultsListTest = mutableListOf<QuerySolution>()
+                while (resultstest.hasNext()) {
+                    resultsListTest.add(resultstest.nextSolution())
+                }
+
+
+
 
                 model.add(model.createResource("_:$currentChar"), model.createProperty("renc:encNLabel"), model.createLiteral(EC(
                     `@value` = Base64.getEncoder().encodeToString(encryptedObject),
@@ -90,12 +153,12 @@ object RDFEncryptionProcessor {
                 ).toString()))
 
                 val statement = model.createStatement(
-                    model.createResource("ex:reificationQuad$currentReificationNumber"),
+                    model.createResource("http://example.org/reificationQuad$currentReificationNumber"),
                     model.createProperty("renc:encPredicate"),
                     model.createLiteral("_:$currentChar")
                 )
 
-                val reifiedStatement = statement.createReifiedStatement("ex:reificationQuad$currentReificationNumber")
+                val reifiedStatement = statement.createReifiedStatement("http://example.org/reificationQuad$currentReificationNumber")
                 reifiedStatement.addProperty(model.createProperty("renc:encPLabel"), EC(
                     `@value` = Base64.getEncoder().encodeToString(encryptedPredicate),
                     renc_datatype = XSDDatatype.XSDstring.uri,
@@ -113,8 +176,8 @@ object RDFEncryptionProcessor {
             ///////////////////////////////
 
             val selectQueryObj = """
-                    PREFIX ex: <https://example.org/>
-                    PREFIX renc: <https://www.w3.org/ns/renc#>
+                    PREFIX ex: <http://example.org/>
+                    PREFIX renc: <http://www.w3.org/ns/renc#>
                     SELECT ?s ?p
                     WHERE {
                         ?s ?p "$value" .
@@ -136,8 +199,8 @@ object RDFEncryptionProcessor {
                 val predicateValue = result.getResource("p")
 
                 val updateQuery = """
-                        PREFIX ex: <https://example.org/>
-                        PREFIX renc: <https://www.w3.org/ns/renc#>
+                        PREFIX ex: <http://example.org/>
+                        PREFIX renc: <http://www.w3.org/ns/renc#>
                         DELETE { <$subjectValue> <$predicateValue> "$value" }
                         INSERT { <$subjectValue> <$predicateValue> "_:$currentChar" }
                         WHERE {
@@ -154,7 +217,7 @@ object RDFEncryptionProcessor {
                 UpdateAction.parseExecute(updateQuery, model)
             }
 
-            if (!resultsListObj.isEmpty()) currentChar++
+            if (resultsListObj.isNotEmpty()) currentChar++
 
             queryExecObj.close()
 
@@ -166,122 +229,295 @@ object RDFEncryptionProcessor {
 
             val resultsListSubj = model.listStatements(subjectRes, null as Property?, null as RDFNode?).toList()
 
-            val encryptedSubject = aesGcmEncrypt(resultsListSubj.toString().toByteArray(), secretKey, associatedData)
-            val encryptedSubjectString = Base64.getEncoder().encodeToString(encryptedSubject)
+            /*
+                Get triples in Turtle form
+            */
+            val turtleBuilder = StringBuilder()
 
-            // Remove triples with old subject value
-            model.remove(resultsListSubj)
-
-            model.add(model.createResource("_:$currentChar"), model.createProperty("renc:encNLabel"), model.createLiteral(EC(
-                `@value` = encryptedSubjectString,
-                renc_datatype = XSDDatatype.XSDstring.uri
-            ).toString()))
-
-            val selectQuerySubjAsObj = """
-                    PREFIX ex: <https://example.org/>
-                    PREFIX renc: <https://www.w3.org/ns/renc#>
-                    SELECT ?s ?p
-                    WHERE {
-                        ?s ?p <$value> .
-                    }
-                """.trimIndent()
-
-            val queryExecSubjAsObj: QueryExecution = QueryExecutionFactory.create(selectQuerySubjAsObj, model)
-            val resultsSubjAsObj: ResultSet = queryExecSubjAsObj.execSelect()
-
-            val resultsListSubjAsObj = mutableListOf<QuerySolution>()
-            while (resultsSubjAsObj.hasNext()) {
-                resultsListSubjAsObj.add(resultsSubjAsObj.nextSolution())
+            resultsListSubj.joinToString("\n") { stmt ->
+                turtleBuilder.append("<${stmt.subject}> <${stmt.predicate}> \"${stmt.`object`}\" .\n")
+            }
+            if (turtleBuilder.isNotEmpty()) {
+                turtleBuilder.setLength(turtleBuilder.length - 1)  // Remove the last character (newline)
             }
 
-            for (result in resultsListSubjAsObj) {
-                val subjectValue = result.getResource("s")
-                val predicateValue = result.getResource("p")
+            val turtleString = turtleBuilder.toString()
 
-                val updateQuery = """
-                        PREFIX ex: <https://example.org/>
-                        PREFIX renc: <https://www.w3.org/ns/renc#>
-                        DELETE { <$subjectValue> <$predicateValue> <$value> }
-                        INSERT { <$subjectValue> <$predicateValue> "_:$currentChar" }
+
+            if (turtleString.isNotEmpty()) {
+                val encryptedSubject = aesGcmEncrypt(turtleString.toByteArray(), secretKey, associatedData)
+
+                // Remove triples with old subject value
+                model.remove(resultsListSubj)
+
+                model.add(
+                    model.createResource("_:$currentChar"), model.createProperty("renc:encNLabel"), model.createLiteral(
+                        EC(
+                            `@value` = Base64.getEncoder().encodeToString(encryptedSubject),
+                            renc_datatype = "rdf:Resource"
+                        ).toString()
+                    )
+                )
+
+                val selectQuerySubjAsObj = """
+                        PREFIX ex: <http://example.org/>
+                        PREFIX renc: <http://www.w3.org/ns/renc#>
+                        SELECT ?s ?p
                         WHERE {
-                            <$subjectValue> <$predicateValue> <$value> .
+                            ?s ?p <$value> .
                         }
                     """.trimIndent()
 
-                UpdateAction.parseExecute(updateQuery, model)
+                val queryExecSubjAsObj: QueryExecution = QueryExecutionFactory.create(selectQuerySubjAsObj, model)
+                val resultsSubjAsObj: ResultSet = queryExecSubjAsObj.execSelect()
+
+                val resultsListSubjAsObj = mutableListOf<QuerySolution>()
+                while (resultsSubjAsObj.hasNext()) {
+                    resultsListSubjAsObj.add(resultsSubjAsObj.nextSolution())
+                }
+
+                for (result in resultsListSubjAsObj) {
+                    val subjectValue = result.getResource("s")
+                    val predicateValue = result.getResource("p")
+
+                    val updateQuery = """
+                            PREFIX ex: <http://example.org/>
+                            PREFIX renc: <http://www.w3.org/ns/renc#>
+                            DELETE { <$subjectValue> <$predicateValue> <$value> }
+                            INSERT { <$subjectValue> <$predicateValue> "_:$currentChar" }
+                            WHERE {
+                                <$subjectValue> <$predicateValue> <$value> .
+                            }
+                        """.trimIndent()
+
+                    UpdateAction.parseExecute(updateQuery, model)
+                }
+
+                if (resultsListSubjAsObj.isNotEmpty()) currentChar++
+
+                queryExecSubjAsObj.close()
             }
-
-            queryExecSubjAsObj.close()
-
-
         }
 
-        for (group in tripleGroupsToEncrypt) {
-            val queryHelper = StringBuilder()
-
-            group.joinToString("\n") { stmt ->
-                queryHelper.append("<${stmt.subject}> <${stmt.predicate}> \"${stmt.`object`}\" .\n")
-            }
-
-            val valueToEncrypt = queryHelper.toString()
-            val encryptedValue = aesGcmEncrypt(valueToEncrypt.toByteArray(), secretKey, associatedData)
-            val encryptedValueString = Base64.getEncoder().encodeToString(encryptedValue)
-            val ECString = EC(
-                `@value` = encryptedValueString,
-                renc_datatype = XSDDatatype.XSDstring.uri
-            ).toString()
-
-            val updateQuery = """
-                    PREFIX ex: <https://example.org/>
-                    PREFIX renc: <https://www.w3.org/ns/renc#>
-                    DELETE {
-                        $queryHelper
-                    }
-                    INSERT {
-                        <_:$currentChar> <renc:encTriples> "$ECString"
-                    }
-                    WHERE {
-                        $queryHelper
-                    }
-                """.trimIndent()
-
-            currentChar++
-
-            UpdateAction.parseExecute(updateQuery, model)
-        }
-
-
-        //model.write(System.out, "TTL") // Debug print statement
+        println("Encryption print: ")
+        model.write(System.out, "TTL") // Debug print statement
 
         val writer = StringWriter()
         model.write(writer, "JSON-LD")
         return writer.toString()
     }
 
+
+
+
+
+
+
+
     fun decryptRDF(jsonString: String, secretKey: ByteArray, associatedData: ByteArray) {
         model.read(StringReader(jsonString), null, "JSON-LD")
 
-        ///////////////////////////
-        // Handle renc:encNLabel //
-        ///////////////////////////
+        val listStatements = model.listStatements().toList()
 
-
-
+        listStatements.forEach { stmt ->
+            if (stmt.subject.isAnon) { // Check if the subject is a blank node
+                model.remove(stmt) // Remove all triples related to this blank node
+            }
+        }
 
         ///////////////////////////
         // Handle renc:Predicate //
         ///////////////////////////
 
+        val selectQueryPred = """
+                    PREFIX ex: <http://example.org/>
+                    PREFIX renc: <http://www.w3.org/ns/renc#>
+                    SELECT ?s ?o
+                    WHERE {
+                        ?s renc:encPredicate ?o .
+                    }
+                """.trimIndent()
+
+        val queryExecPred: QueryExecution = QueryExecutionFactory.create(selectQueryPred, model)
+        val resultsPred: ResultSet = queryExecPred.execSelect()
+
+        val resultsListPred = mutableListOf<QuerySolution>()
+        while (resultsPred.hasNext()) {
+            resultsListPred.add(resultsPred.nextSolution())
+        }
+
+        for (result in resultsListPred) {
+            val subjectValue = result.getResource("s")
+            val objectValue = result.get("o") as Resource
+
+            val newObject = model.listStatements(objectValue, model.createProperty("http://www.w3.org/1999/02/22-rdf-syntax-ns#object"), null as RDFNode?).toList().first().`object`
+            val encPLabel = model.listStatements(objectValue, model.createProperty("http://www.w3.org/ns/renc#encPLabel"), null as RDFNode?).toList().first().`object`
+
+            val toDecrypt = EC.fromCustomString(encPLabel.toString())
+            val base64Decoded = Base64.getDecoder().decode(toDecrypt.`@value`)
+            val decryptedValue =  aesGcmDecrypt(base64Decoded, secretKey, associatedData)
+            val decryptedString = String(decryptedValue!!, Charsets.UTF_8)
+
+            val updateQuery = """
+                        PREFIX ex: <http://example.org/>
+                        PREFIX renc: <http://www.w3.org/ns/renc#>
+                        PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+                        DELETE { ?s renc:encPredicate <$objectValue> }
+                        INSERT { ?s <$decryptedString> "$newObject" }
+                        WHERE {
+                            ?s renc:encPredicate <$objectValue> .
+                        }
+                    """.trimIndent()
+
+            UpdateAction.parseExecute(updateQuery, model)
+
+            val statements = model.listStatements(objectValue, null as Property?, null as RDFNode?)
+            model.remove(statements)
+
+        }
 
 
+        println("##############################################################################")
+        println("renc:encPredicatesss weggggg: ")
+        println("##############################################################################")
+        println("")
+        model.write(System.out, "TTL")
 
+        ///////////////////////////
+        // Handle renc:encNLabel //
+        ///////////////////////////
+
+        val selectQueryObj = """
+                    PREFIX ex: <http://example.org/>
+                    PREFIX renc: <http://www.w3.org/ns/renc#>
+                    SELECT ?s ?o
+                    WHERE {
+                        ?s <renc:encNLabel> ?o .
+                    }
+                """.trimIndent()
+
+        val queryExecObj: QueryExecution = QueryExecutionFactory.create(selectQueryObj, model)
+        val resultsObj: ResultSet = queryExecObj.execSelect()
+
+        val resultsListObj = mutableListOf<QuerySolution>()
+        while (resultsObj.hasNext()) {
+            resultsListObj.add(resultsObj.nextSolution())
+        }
+
+        for (result in resultsListObj) {
+            val subjectValue = result.getResource("s")
+            val objectValue = result.getLiteral("o").string
+
+            val toDecrypt = EC.fromCustomString(objectValue)
+            val base64Decoded = Base64.getDecoder().decode(toDecrypt.`@value`)
+
+            val decryptedValue =  aesGcmDecrypt(base64Decoded, secretKey, associatedData)
+
+            val decryptedString = String(decryptedValue!!, Charsets.UTF_8)
+            val renc_datatype = toDecrypt.renc_datatype
+
+            var newObject: Any? = null
+            if (renc_datatype == "rdf:Resource") {
+                val parserModel = ModelFactory.createDefaultModel()
+                parserModel.read(StringReader(decryptedString), "http://example.org/", "Turtle")
+                model.add(parserModel)
+
+                newObject = parserModel.listStatements().nextStatement().subject.uri
+            }
+            else {
+                newObject = decryptedString
+            }
+
+            model.removeAll(subjectValue, null, null)
+            val updateQuery = """
+                        PREFIX ex: <http://example.org/>
+                        PREFIX renc: <http://www.w3.org/ns/renc#>
+                        DELETE { ?s ?p "$subjectValue" }
+                        INSERT { ?s ?p "$newObject" }
+                        WHERE {
+                            ?s ?p "$subjectValue" .
+                        }
+                    """.trimIndent()
+
+            UpdateAction.parseExecute(updateQuery, model)
+
+            val a = 1
+        }
+
+        println("##############################################################################")
+        println("renc:encTriples weggggg: ")
+        println("##############################################################################")
+        println("")
+        model.write(System.out, "TTL")
 
         ////////////////////////////
         // Handle renc:encTriples //
         ////////////////////////////
 
 
+        val selectQueryEncTriples = """
+                    PREFIX ex: <http://example.org/>
+                    PREFIX renc: <http://www.w3.org/ns/renc#>
+                    SELECT ?s ?o
+                    WHERE {
+                        ?s <renc:encTriples> ?o .
+                    }
+                """.trimIndent()
 
+        val queryExecEncTriples: QueryExecution = QueryExecutionFactory.create(selectQueryEncTriples, model)
+        val resultsEncTriples: ResultSet = queryExecEncTriples.execSelect()
+
+        val resultsListEncTriples = mutableListOf<QuerySolution>()
+        while (resultsEncTriples.hasNext()) {
+            resultsListEncTriples.add(resultsEncTriples.nextSolution())
+        }
+
+        for (result in resultsListEncTriples) {
+            val subjectValue = result.getResource("s")
+            val objectValue = result.getLiteral("o")
+
+            val toDecrypt = EC.fromCustomString(objectValue.string)
+            val base64Decoded = Base64.getDecoder().decode(toDecrypt.`@value`)
+
+            val decryptedValue =  aesGcmDecrypt(base64Decoded, secretKey, associatedData)
+
+            val decryptedString = String(decryptedValue!!, Charsets.UTF_8)
+
+
+            val parserModel = ModelFactory.createDefaultModel()
+            parserModel.read(StringReader(decryptedString), "http://example.org/", "Turtle")
+            model.add(parserModel)
+
+            val triplesToAdd = parserModel.listStatements().toList()
+
+            for (stmt in triplesToAdd) {
+                model.add(stmt)
+            }
+
+            model.remove(subjectValue, model.createProperty("renc:encTriples"), objectValue)
+
+
+            val deleteQueryTriples = """
+                    PREFIX ex: <http://example.org/>
+                    PREFIX renc: <http://www.w3.org/ns/renc#>
+                    DELETE {
+                        ?s renc:triples "$subjectValue" .
+                        ?s <renc:triples> "$subjectValue" .
+                    }
+                    WHERE {
+                        ?s renc:triples "$subjectValue" .
+                        ?s <renc:triples> "$subjectValue" .
+                    }
+                """.trimIndent()
+
+            UpdateAction.parseExecute(deleteQueryTriples, model)
+        }
+
+        println("##############################################################################")
+        println("Decryption print: ")
+        println("##############################################################################")
+        println("")
+        model.write(System.out, "TTL")
     }
 
 }
