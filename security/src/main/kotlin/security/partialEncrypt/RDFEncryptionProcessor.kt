@@ -109,42 +109,29 @@ object RDFEncryptionProcessor {
             }
 
             for (result in resultsListPred) {
-                val objectValue = result.getLiteral("o").string
+                val objectValueString = result.getLiteral("o").string
+                val objectDatatypeURI = result.getLiteral("o").datatypeURI
 
-                val encryptedObject = aesGcmEncrypt(objectValue.toString().toByteArray(), secretKey, associatedData)
+                val objectValue = if (objectDatatypeURI == XSDDatatype.XSDstring.uri) {
+                    "\"$objectValueString\""
+                } else {
+                    "\"$objectValueString\"^^<$objectDatatypeURI>"
+                }
 
-                val encryptedPredicate = aesGcmEncrypt(value.toString().toByteArray(), secretKey, associatedData)
+                val encryptedObject = aesGcmEncrypt(objectValueString.toByteArray(), secretKey, associatedData)
+
+                val encryptedPredicate = aesGcmEncrypt(value.toByteArray(), secretKey, associatedData)
 
                 val updateQuery = """
                         PREFIX ex: <http://example.org/>
                         PREFIX renc: <http://www.w3.org/ns/renc#>
-                        DELETE { ?s <$value> "$objectValue" }
+                        DELETE { ?s <$value> $objectValue }
                         INSERT { ?s renc:encPredicate ex:reificationQuad$currentReificationNumber }
 
                         WHERE {
-                            ?s <$value> "$objectValue" .
+                            ?s <$value> $objectValue .
                         }
                     """.trimIndent()
-
-
-                val testQuery = """
-                        PREFIX ex: <http://example.org/>
-                        PREFIX renc: <http://www.w3.org/ns/renc#>
-                        SELECT ?s ?o
-                        WHERE {
-                            ?s <$value> "$objectValue" .
-                        }
-                    """.trimIndent()
-
-                val testQueryexec: QueryExecution = QueryExecutionFactory.create(testQuery, model)
-                val resultstest: ResultSet = testQueryexec.execSelect()
-
-                val resultsListTest = mutableListOf<QuerySolution>()
-                while (resultstest.hasNext()) {
-                    resultsListTest.add(resultstest.nextSolution())
-                }
-
-
 
 
                 model.add(model.createResource("_:$currentChar"), model.createProperty("renc:encNLabel"), model.createLiteral(EC(
@@ -422,10 +409,13 @@ object RDFEncryptionProcessor {
                 parserModel.read(StringReader(decryptedString), "http://example.org/", "Turtle")
                 model.add(parserModel)
 
-                newObject = parserModel.listStatements().nextStatement().subject.uri
+                newObject = "\"${parserModel.listStatements().nextStatement().subject.uri}\""
+            }
+            else if (renc_datatype == XSDDatatype.XSDstring.uri) {
+                newObject = "\"$decryptedString\""
             }
             else {
-                newObject = decryptedString
+                newObject = "\"$decryptedString\"^^<$renc_datatype>"
             }
 
             model.removeAll(subjectValue, null, null)
@@ -433,7 +423,7 @@ object RDFEncryptionProcessor {
                         PREFIX ex: <http://example.org/>
                         PREFIX renc: <http://www.w3.org/ns/renc#>
                         DELETE { ?s ?p "$subjectValue" }
-                        INSERT { ?s ?p "$newObject" }
+                        INSERT { ?s ?p $newObject }
                         WHERE {
                             ?s ?p "$subjectValue" .
                         }
