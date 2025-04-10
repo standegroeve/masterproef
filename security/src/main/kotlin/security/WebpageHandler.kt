@@ -1,9 +1,14 @@
 package security
 
+import io.vertx.ext.web.handler.BodyHandler
 import io.vertx.core.AbstractVerticle
+import io.vertx.core.json.JsonObject
 import io.vertx.ext.web.Router
 import io.vertx.ext.web.RoutingContext
+import org.apache.jena.rdf.model.ModelFactory
+import org.apache.jena.rdf.model.Statement
 import security.crypto.generatePrekeys
+import java.io.StringReader
 import java.nio.ByteBuffer
 
 class MainVerticle : AbstractVerticle() {
@@ -17,9 +22,9 @@ class MainVerticle : AbstractVerticle() {
         Bob.preKeys = generatePrekeys()
 
 
-
         // Create an HTTP server and router
         val router = Router.router(vertx)
+        router.route().handler(BodyHandler.create())
 
         // Serve the HTML page at the root URL
         router.get("/").handler(this::serveHtmlPage)
@@ -36,10 +41,10 @@ class MainVerticle : AbstractVerticle() {
         router.get("/processInitialMessage").handler(this::processInitialMessage)
 
         // Define the endpoint to send a message
-        router.get("/sendMessage").handler(this::sendMessage)
+        router.post("/sendMessage").handler(this::sendMessage)
 
         //Define the endpoint to retrieve the messages
-        router.get("/retrieveMessages").handler(this::retrieveMessages)
+        router.post("/retrieveMessages").handler(this::retrieveMessages)
 
         // Create the HTTP server
         vertx.createHttpServer()
@@ -95,6 +100,14 @@ class MainVerticle : AbstractVerticle() {
                     background-color: #f9f9f9;
                     overflow-y: auto;
                 }
+                .grid-container {
+                    display: grid;
+                    grid-template-columns: auto auto;
+                }
+                .grid-item {
+                    height: 100px;
+                    resize: none;
+                }
                 </style>
             </head>
             <body>
@@ -115,21 +128,43 @@ class MainVerticle : AbstractVerticle() {
                         <button onclick="sendInitialMessage()">Send Initial Message</button>
                         <button onclick="processInitialMessage()">Process Initial Message</button>
                     </div>
+                    <div class="top-section">
+                        <input type="checkbox" id="keepStructure">
+                        <label for="keepStructure">Keep Structure</label>
+                        <input type="checkbox" id="groupMessage">
+                        <label for="groupMessage">Send Group Message</label>
+                    </div>
+                    
+                    <div class="grid-container">
+                        <div class="grid-item">
+                            <h3>Values that should be encrypted (uri's with prefix)</h3>
+                            <textarea id="valuesToEncryptString" rows="7" cols="40"></textarea>
+                        </div>
+                        <div class="grid-item">
+                            <h3>Groups of triples that should be encrypted</h3>
+                            <textarea id="tripleGroupsToEncryptString" rows="7" cols="40"></textarea>
+                        </div>
+                    </div>
+
     
                     <div class="input-container">
                         <div>
                             <h2>Alice's Messages</h2>
-                            <input type="text" id="aliceMessage" placeholder="Enter Alice's message">
+                            <textarea id="aliceMessage" placeholder="Enter Alice's message"></textarea>
                             <button onclick="sendMessage('alice')">Send</button>
                         </div>
                         <div>
                             <h2>Bob's Messages</h2>
-                            <input type="text" id="bobMessage" placeholder="Enter Bob's message">
+                            <textarea id="bobMessage" placeholder="Enter Bob's message"></textarea>
                             <button onclick="sendMessage('bob')">Send</button>
                         </div>
                     </div>
     
                     <div class="inbox-container">
+                        <div>
+                            <h3>Encryption message that was send</h3>
+                            <div id="encryptedMessage" class="inbox"></div>
+                        </div>
                         <div>
                             <h2>Alice's Inbox</h2>
                             <button onclick="retrieveMessages('alice')">Retrieve Messages</button>
@@ -198,6 +233,10 @@ class MainVerticle : AbstractVerticle() {
                     function sendMessage(sender) {
                         const message = sender === 'alice' ? document.getElementById('aliceMessage').value : document.getElementById('bobMessage').value;
                         let authCode = document.getElementById('authCode').value;
+                        const keepStructure = document.getElementById('keepStructure').checked ? "true" : "false";
+                        const valuesToEncryptString = document.getElementById('valuesToEncryptString').value;
+                        const tripleGroupsToEncryptString = document.getElementById('tripleGroupsToEncryptString').value;
+
 
                         if (message) {
                             const timestamp = Date.now();
@@ -208,10 +247,35 @@ class MainVerticle : AbstractVerticle() {
                                 bobInbox.push({ sender: sender, content: message, timestamp: timestamp });
                             }
                             
-                            fetch('/sendMessage?pod=' + podName + '&sender=' + sender + '&message=' + encodeURIComponent(message) + '&timestamp=' + timestamp + '&authCode=' + authCode)
+                            fetch('/sendMessage', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                    },
+                                    body: JSON.stringify({
+                                        pod: podName,
+                                        sender: sender,
+                                        message: message,
+                                        timestamp: timestamp,
+                                        authCode: authCode,
+                                        keepStructure: keepStructure,
+                                        valuesToEncryptString: valuesToEncryptString,
+                                        tripleGroupsToEncryptString: tripleGroupsToEncryptString
+                                    }),
+                                })
                                 .then(response => response.json())
                                 .then(data => {
                                     alert(data.message);
+                                    
+                                    let encbox = document.getElementById('encryptedMessage');
+                                    encbox.innerHTML = '';
+                                    
+                                    if (keepStructure == true) {
+                                        let encmsgElement = document.createElement("p");
+                                        encmsgElement.innerHTML = data.encryptedMessage;
+                                        encbox.appendChild(encmsgElement);
+                                    }
+                                    
                                     if (sender === 'alice') {
                                         document.getElementById('aliceMessage').value = ''; // Clear Alice's input field
                                     } else {
@@ -233,7 +297,20 @@ class MainVerticle : AbstractVerticle() {
                     
                     function retrieveMessages(user) {
                         let authCode = document.getElementById('authCode').value;
-                        fetch('/retrieveMessages?pod=' + podName + '&user=' + user + '&authCode=' + authCode)
+                        const keepStructure = document.getElementById('keepStructure').checked ? "true" : "false";
+                        
+                        fetch('/retrieveMessages', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({
+                                    pod: podName,
+                                    user: user,
+                                    authCode: authCode,
+                                    keepStructure: keepStructure
+                                }),
+                            })
                             .then(response => response.json())
                             .then(data => {
                                 const inbox = user === 'alice' ? aliceInbox : bobInbox;
@@ -241,12 +318,8 @@ class MainVerticle : AbstractVerticle() {
                                 const sender = user === 'alice' ? 'bob' : 'alice';
 
                                 data.messages.forEach(msg => {
-                                    const plainTextMatch = msg.match(/plainText=([^,]+)/);
-                                    const plainText = plainTextMatch ? plainTextMatch[1] : null;
-                                    
-                                    // Extract timestamp
-                                    const timestampMatch = msg.match(/timestamp=(\d+)/);
-                                    const timestamp = timestampMatch ? Number(timestampMatch[1]) : null;
+                                    const plainText = msg.plainText
+                                    const timestamp = msg.timestamp
                                                                         
                                     inbox.push({sender: sender, content: plainText, timestamp: timestamp})
                                 });
@@ -376,34 +449,50 @@ class MainVerticle : AbstractVerticle() {
     /*
         Send a new message
      */
+
     private fun sendMessage(ctx: RoutingContext) {
-        val targetPodId = ctx.request().getParam("pod")
-        val sender = ctx.request().getParam("sender")
-        val message = ctx.request().getParam("message")
-        val timestampString = ctx.request().getParam("timestamp")
+        val jsonBody = ctx.body().asJsonObject()
+
+        val targetPodId = jsonBody.getString("pod")
+        val sender = jsonBody.getString("sender")
+        val message = jsonBody.getString("message")
+        val timestampString = jsonBody.getString("timestamp")
         val timestampBytes = ByteBuffer.allocate(8).putLong(timestampString.toLong()).array()
-        val authCode = ctx.request().getParam("authCode")
+        val authCode = jsonBody.getString("authCode")
+        val keepStructureParam = jsonBody.getString("keepStructure")
+        val keepStructure = keepStructureParam != null && keepStructureParam == "true"
+
+        val valuesToEncryptString = jsonBody.getString("valuesToEncryptString")
+        val tripleGroupsToEncryptString = jsonBody.getString("tripleGroupsToEncryptString")
+
+        val encryptionLists = processEncryptionLists(valuesToEncryptString, tripleGroupsToEncryptString)
+        val valuesToEncrypt = if (keepStructure) encryptionLists.first else emptyList<String>()
+        val tripleGroupsToEncrypt = if (keepStructure) encryptionLists.second else emptyList<List<Statement>>()
 
         if (targetPodId != null && sender != null && message != null) {
-
+            var encryptedMessage: String?
             if (isNotInitialized) {
                 if (sender == "alice") {
-                    Alice.sendInitialMessage(targetPodId, message.toByteArray(), timestampBytes, authCode)
+                    encryptedMessage = Alice.sendInitialMessage(targetPodId, message.toByteArray(), timestampBytes, authCode, keepStructure, valuesToEncrypt, tripleGroupsToEncrypt)
                     isNotInitialized = false
                 } else {
-                    Bob.sendInitialMessage(targetPodId, message.toByteArray(), timestampBytes, authCode)
+                    encryptedMessage = Bob.sendInitialMessage(targetPodId, message.toByteArray(), timestampBytes, authCode, keepStructure, valuesToEncrypt, tripleGroupsToEncrypt)
                     isNotInitialized = false
                 }
             } else {
                 if (sender == "alice") {
-                    Alice.sendMessage(targetPodId, message.toByteArray(), timestampBytes, authCode)
+                    encryptedMessage = Alice.sendMessage(targetPodId, message.toByteArray(), timestampBytes, authCode, keepStructure, valuesToEncrypt, tripleGroupsToEncrypt)
                 } else {
-                    Bob.sendMessage(targetPodId, message.toByteArray(), timestampBytes, authCode)
+                    encryptedMessage = Bob.sendMessage(targetPodId, message.toByteArray(), timestampBytes, authCode, keepStructure, valuesToEncrypt, tripleGroupsToEncrypt)
                 }
             }
+            val jsonResponse = JsonObject()
+                .put("message", "Message sent from $sender to $targetPodId pod")
+                .put("encryptedMessage", encryptedMessage)
+
             ctx.response()
                 .putHeader("Content-Type", "application/json")
-                .end("{\"message\": \"Message sent from $sender to $targetPodId pod\"}")
+                .end(jsonResponse.encode())
         } else {
             ctx.response()
                 .putHeader("Content-Type", "application/json")
@@ -411,20 +500,53 @@ class MainVerticle : AbstractVerticle() {
         }
     }
 
+    private fun processEncryptionLists(valuesToEncryptString: String, tripleGroupsToEncryptString: String): Pair<List<String>, List<List<Statement>>> {
+        val valuesToEncryptModel = ModelFactory.createDefaultModel()
+        val groupsToEncryptModel = ModelFactory.createDefaultModel()
+
+        try {
+            valuesToEncryptModel.read(StringReader(valuesToEncryptString), null, "JSON-LD")
+            groupsToEncryptModel.read(StringReader(tripleGroupsToEncryptString), null, "JSON-LD")
+        }
+        catch (error: Error) {
+            throw Error("No valid json was provided")
+        }
+        val encryptionConfigRes = valuesToEncryptModel.getResource("http://example.org/encryptionValues")
+        val propertyToEncrypt = valuesToEncryptModel.getProperty("http://example.org/valuesToEncrypt")
+
+        val valuesToEncryptList = valuesToEncryptModel.listObjectsOfProperty(encryptionConfigRes, propertyToEncrypt)
+            .toList()
+            .map { it.asResource().uri }
+
+
+
+        val tripleGroupsToEncrypt = groupsToEncryptModel.listStatements().toList()
+            .groupBy { it.subject }
+            .values.toList()
+
+        return Pair(valuesToEncryptList, tripleGroupsToEncrypt)
+    }
+
     /*
         Retrieve new messages
      */
     private fun retrieveMessages(ctx: RoutingContext) {
-        val targetPodId = ctx.request().getParam("pod")
-        val user = ctx.request().getParam("user")
-        val authCode = ctx.request().getParam("authCode")
+        val jsonBody = ctx.body().asJsonObject()
+
+        val targetPodId = jsonBody.getString("pod")
+        val user = jsonBody.getString("user")
+        val authCode = jsonBody.getString("authCode")
+        val keepStructureParam = jsonBody.getString("keepStructure")
+        val keepStructure = keepStructureParam != null && keepStructureParam == "true"
 
         if (targetPodId != null && user != null) {
-            val messages = if (user == "alice") Alice.receiveMessage(targetPodId, authCode) else Bob.receiveMessage(targetPodId, authCode)
+            val messages = if (user == "alice") Alice.receiveMessage(targetPodId, authCode, keepStructure) else Bob.receiveMessage(targetPodId, authCode, keepStructure)
+
+            val jsonResponse = JsonObject().put("messages", messages)
 
             ctx.response()
                 .putHeader("Content-Type", "application/json")
-                .end("{\"messages\": ${messages.map { "\"$it\"" }}}")
+                .end(jsonResponse.encode())
         } else {
             ctx.response()
                 .putHeader("Content-Type", "application/json")

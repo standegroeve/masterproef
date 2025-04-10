@@ -47,7 +47,7 @@ object RDFEncryptionProcessor {
     val model = ModelFactory.createDefaultModel()
 
 
-    fun encryptRDF(jsonString: String, secretKey: ByteArray, associatedData: ByteArray, valuesToEncrypt: List<String>, tripleGroupsToEncrypt: List<List<Statement>>): String {
+    fun encryptRDF(jsonString: String, timestampBytes: ByteArray, secretKey: ByteArray, associatedData: ByteArray, valuesToEncrypt: List<String>, tripleGroupsToEncrypt: List<List<Statement>>): String {
         model.read(StringReader(jsonString), "http://example.org/", "JSON-LD")
 
         var currentChar = 'A'
@@ -68,7 +68,7 @@ object RDFEncryptionProcessor {
             }
 
             val valueToEncrypt = queryHelper.toString()
-            val encryptedValue = aesGcmEncrypt(valueToEncrypt.toByteArray(), secretKey, associatedData)
+            val encryptedValue = aesGcmEncrypt(timestampBytes + valueToEncrypt.toByteArray(), secretKey, associatedData)
 
             val ECString = EC(
                 `@value` = Base64.getEncoder().encodeToString(encryptedValue),
@@ -118,9 +118,9 @@ object RDFEncryptionProcessor {
                     "\"$objectValueString\"^^<$objectDatatypeURI>"
                 }
 
-                val encryptedObject = aesGcmEncrypt(objectValueString.toByteArray(), secretKey, associatedData)
+                val encryptedObject = aesGcmEncrypt(timestampBytes + objectValueString.toByteArray(), secretKey, associatedData)
 
-                val encryptedPredicate = aesGcmEncrypt(value.toByteArray(), secretKey, associatedData)
+                val encryptedPredicate = aesGcmEncrypt(timestampBytes + value.toByteArray(), secretKey, associatedData)
 
                 val updateQuery = """
                         PREFIX ex: <http://example.org/>
@@ -179,7 +179,7 @@ object RDFEncryptionProcessor {
                 resultsListObj.add(resultsObj.nextSolution())
             }
 
-            val encryptedObject = aesGcmEncrypt(value.toString().toByteArray(), secretKey, associatedData)
+            val encryptedObject = aesGcmEncrypt(timestampBytes + value.toByteArray(), secretKey, associatedData)
 
             for (result in resultsListObj) {
                 val subjectValue = result.getResource("s")
@@ -232,7 +232,7 @@ object RDFEncryptionProcessor {
 
 
             if (turtleString.isNotEmpty()) {
-                val encryptedSubject = aesGcmEncrypt(turtleString.toByteArray(), secretKey, associatedData)
+                val encryptedSubject = aesGcmEncrypt(timestampBytes + turtleString.toByteArray(), secretKey, associatedData)
 
                 // Remove triples with old subject value
                 model.remove(resultsListSubj)
@@ -301,7 +301,9 @@ object RDFEncryptionProcessor {
 
 
 
-    fun decryptRDF(jsonString: String, secretKey: ByteArray, associatedData: ByteArray) {
+    fun decryptRDF(jsonString: String, secretKey: ByteArray, associatedData: ByteArray): Pair<String, Long> {
+        var timestampBytes: Long? = null
+
         model.read(StringReader(jsonString), null, "JSON-LD")
 
         val listStatements = model.listStatements().toList()
@@ -342,8 +344,13 @@ object RDFEncryptionProcessor {
 
             val toDecrypt = EC.fromCustomString(encPLabel.toString())
             val base64Decoded = Base64.getDecoder().decode(toDecrypt.`@value`)
+
             val decryptedValue =  aesGcmDecrypt(base64Decoded, secretKey, associatedData)
-            val decryptedString = String(decryptedValue!!, Charsets.UTF_8)
+            val decryptedString = String(decryptedValue!!.copyOfRange(8, decryptedValue.size))
+
+            if (timestampBytes == null) timestampBytes = decryptedValue.copyOfRange(0, 8).fold(0L) { acc, byte ->
+                (acc shl 8) or (byte.toLong() and 0xFF)
+            }
 
             val updateQuery = """
                         PREFIX ex: <http://example.org/>
@@ -363,12 +370,6 @@ object RDFEncryptionProcessor {
 
         }
 
-
-        println("##############################################################################")
-        println("renc:encPredicatesss weggggg: ")
-        println("##############################################################################")
-        println("")
-        model.write(System.out, "TTL")
 
         ///////////////////////////
         // Handle renc:encNLabel //
@@ -400,16 +401,22 @@ object RDFEncryptionProcessor {
 
             val decryptedValue =  aesGcmDecrypt(base64Decoded, secretKey, associatedData)
 
-            val decryptedString = String(decryptedValue!!, Charsets.UTF_8)
+            val decryptedString = String(decryptedValue!!.copyOfRange(8, decryptedValue.size))
+
+            if (timestampBytes == null) timestampBytes = decryptedValue.copyOfRange(0, 8).fold(0L) { acc, byte ->
+                (acc shl 8) or (byte.toLong() and 0xFF)
+            }
+
             val renc_datatype = toDecrypt.renc_datatype
 
             var newObject: Any? = null
             if (renc_datatype == "rdf:Resource") {
                 val parserModel = ModelFactory.createDefaultModel()
+                parserModel.setNsPrefixes(model.nsPrefixMap)
                 parserModel.read(StringReader(decryptedString), "http://example.org/", "Turtle")
                 model.add(parserModel)
 
-                newObject = "\"${parserModel.listStatements().nextStatement().subject.uri}\""
+                newObject = parserModel.shortForm(parserModel.listStatements().nextStatement().subject.uri)
             }
             else if (renc_datatype == XSDDatatype.XSDstring.uri) {
                 newObject = "\"$decryptedString\""
@@ -433,12 +440,6 @@ object RDFEncryptionProcessor {
 
             val a = 1
         }
-
-        println("##############################################################################")
-        println("renc:encTriples weggggg: ")
-        println("##############################################################################")
-        println("")
-        model.write(System.out, "TTL")
 
         ////////////////////////////
         // Handle renc:encTriples //
@@ -471,7 +472,9 @@ object RDFEncryptionProcessor {
 
             val decryptedValue =  aesGcmDecrypt(base64Decoded, secretKey, associatedData)
 
-            val decryptedString = String(decryptedValue!!, Charsets.UTF_8)
+            val decryptedString = String(decryptedValue!!.copyOfRange(8, decryptedValue.size))
+
+            if (timestampBytes == null) timestampBytes = decryptedValue.copyOfRange(0, 8).toString().toLong()
 
 
             val parserModel = ModelFactory.createDefaultModel()
@@ -507,7 +510,10 @@ object RDFEncryptionProcessor {
         println("Decryption print: ")
         println("##############################################################################")
         println("")
-        model.write(System.out, "TTL")
+
+        val writer = StringWriter()
+        model.write(writer, "JSON-LD")
+        return Pair(writer.toString(), timestampBytes!!)
     }
 
 }

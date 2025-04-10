@@ -15,6 +15,7 @@ class testEncryptionProcessor() {
 
     val randomKey = generateX25519KeyPair().first
     val associatedData = ByteArray(16)
+    val timestampBytes = ByteArray(8)
 
 
     @BeforeAll
@@ -100,7 +101,7 @@ class testEncryptionProcessor() {
                   "ex:hasAge": "7"
                 }
               ],
-              "ex:test": [ "ex:test2", "testfdsqfdf" ]
+              "ex:test": [ "test2", "testfdsqfdf" ]
             }
             """.trimIndent()
 
@@ -118,7 +119,7 @@ class testEncryptionProcessor() {
             .values.toList()
 
 
-        val result = RDFEncryptionProcessor.encryptRDF(jsonString, randomKey.encoded, associatedData, valuesToEncryptList, tripleGroupsToEncrypt)
+        val result = RDFEncryptionProcessor.encryptRDF(jsonString, timestampBytes, randomKey.encoded, associatedData, valuesToEncryptList, tripleGroupsToEncrypt)
 
         val a = 2
     }
@@ -176,7 +177,7 @@ class testEncryptionProcessor() {
             .values.toList()
 
 
-        val toDecrypt = RDFEncryptionProcessor.encryptRDF(jsonString, randomKey.encoded, associatedData, valuesToEncryptList, tripleGroupsToEncrypt)
+        val toDecrypt = RDFEncryptionProcessor.encryptRDF(jsonString, timestampBytes, randomKey.encoded, associatedData, valuesToEncryptList, tripleGroupsToEncrypt)
 
         RDFEncryptionProcessor.decryptRDF(toDecrypt, randomKey.encoded, associatedData)
     }

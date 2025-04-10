@@ -1,5 +1,6 @@
 package security
 
+import org.apache.jena.rdf.model.Statement
 import org.apache.kafka.shaded.com.google.protobuf.Timestamp
 import org.bouncycastle.crypto.params.X25519PrivateKeyParameters
 import org.bouncycastle.crypto.params.X25519PublicKeyParameters
@@ -10,6 +11,7 @@ import security.crypto.generateX25519KeyPair
 import security.messages.DecryptedMessage
 import security.messages.EncryptedMessage
 import security.messages.X3DHPreKeys
+import security.partialEncrypt.RDFEncryptionProcessor
 import java.nio.ByteBuffer
 
 class User(val podId: String) {
@@ -34,14 +36,14 @@ class User(val podId: String) {
 
     var latestReceivedMessageId = -1
 
-    fun sendInitialMessage(targetPod: String, input: ByteArray, timestampBytes: ByteArray, authenticationCode: String) {
+    fun sendInitialMessage(targetPod: String, input: ByteArray, timestampBytes: ByteArray, authenticationCode: String, keepStructure: Boolean, valuesToEncrypt: List<String> = emptyList(), tripleGroupsToEncrypt: List<List<Statement>> = emptyList()): String {
         DHKeyPair = generateX25519KeyPair()
         val initialDHoutput = DiffieHellman(DHKeyPair!!.second, X25519PublicKeyParameters(initialDHPublicKey))
         sendingKey = KeyRatchet.SymmetricKeyRatchetRoot(this, initialDHoutput)
-        sendMessage(targetPod, input, timestampBytes, authenticationCode)
+        return sendMessage(targetPod, input, timestampBytes, authenticationCode, keepStructure, valuesToEncrypt, tripleGroupsToEncrypt)
     }
 
-    fun sendMessage(targetPod: String, input: ByteArray, timestampBytes: ByteArray, authenticationCode: String) {
+    fun sendMessage(targetPod: String, input: ByteArray, timestampBytes: ByteArray, authenticationCode: String, keepStructure: Boolean, valuesToEncrypt: List<String> = emptyList(), tripleGroupsToEncrypt: List<List<Statement>> = emptyList()): String {
         val messageId = sentMessageId
         sentMessageId++
 
@@ -54,14 +56,22 @@ class User(val podId: String) {
         val associatedData = DHKeyPair!!.first.encoded + preKeys!!.publicIdentityPreKey.encoded + targetPublicKey!!
 
         // encrypt message
-        val ciphertext = aesGcmEncrypt(timestampBytes + input, messageKey, associatedData)
-        val encrpytedMessage = EncryptedMessage(messageId + 1, DHKeyPair!!.first.encoded, ciphertext!!, sequenceNumber, PN)
+        var ciphertext: Any? = null
+        if (keepStructure) {
+            ciphertext = RDFEncryptionProcessor.encryptRDF(String(input, Charsets.UTF_8), timestampBytes, messageKey, associatedData, valuesToEncrypt, tripleGroupsToEncrypt).toByteArray()
+        }
+        else {
+            ciphertext = aesGcmEncrypt(timestampBytes + input, messageKey, associatedData)
+        }
+        val encrpytedMessage = EncryptedMessage(messageId + 1, DHKeyPair!!.first.encoded, ciphertext as ByteArray, sequenceNumber, PN)
 
         // sends the message to the pod
         messageController.sendMessage(podId, targetPod, encrpytedMessage, authenticationCode)
+
+        return String(ciphertext, Charsets.UTF_8)
     }
 
-    fun receiveMessage(targetPod: String, authenticationCode: String): List<DecryptedMessage> {
+    fun receiveMessage(targetPod: String, authenticationCode: String, keepStructure: Boolean): List<DecryptedMessage> {
         // Retreive messages which we havent seen already or whose key isnt in skippedKeys
         val encryptedMessages = messageController.retrieveMessages(podId, targetPod, latestReceivedMessageId, skippedKeys, authenticationCode)
 
@@ -81,8 +91,20 @@ class User(val podId: String) {
                 val associatedData = message.publicKey + targetPublicKey!! + preKeys!!.publicIdentityPreKey.encoded
 
                 // decrypt message
-                val decryptedData = aesGcmDecrypt(message.cipherText, messageKey!!, associatedData)
-                messagesList.add(DecryptedMessage(message.messageId, message.publicKey, String(decryptedData!!.copyOfRange(8, decryptedData.size), Charsets.UTF_8), ByteBuffer.wrap(decryptedData.copyOfRange(0, 8)).long))
+                var decryptedString: String?
+                var timestampBytes: Long?
+
+                if (keepStructure) {
+                    val result = RDFEncryptionProcessor.decryptRDF(String(message.cipherText, Charsets.UTF_8), messageKey!!, associatedData)
+                    decryptedString = result.first
+                    timestampBytes = result.second
+                }
+                else {
+                    val decryptedData = aesGcmDecrypt(message.cipherText, messageKey!!, associatedData)
+                    decryptedString = String(decryptedData!!.copyOfRange(8, decryptedData.size))
+                    timestampBytes = ByteBuffer.wrap(decryptedData.copyOfRange(0, 8)).long
+                }
+                messagesList.add(DecryptedMessage(message.messageId, message.publicKey, decryptedString!!, timestampBytes!!))
                 continue
             }
 
@@ -123,9 +145,20 @@ class User(val podId: String) {
             val associatedData = message.publicKey + targetPublicKey!! + preKeys!!.publicIdentityPreKey.encoded
 
             // decrypt message
-            val decryptedData = aesGcmDecrypt(message.cipherText, messageKey, associatedData)
+            var decryptedString: String? = null
+            var timestampBytes: Long? = null
 
-            messagesList.add(DecryptedMessage(message.messageId, message.publicKey, String(decryptedData!!.copyOfRange(8, decryptedData.size), Charsets.UTF_8), ByteBuffer.wrap(decryptedData.copyOfRange(0, 8)).long))
+            if (keepStructure) {
+                val result = RDFEncryptionProcessor.decryptRDF(String(message.cipherText, Charsets.UTF_8), messageKey!!, associatedData)
+                decryptedString = result.first
+                timestampBytes = result.second
+            }
+            else {
+                val decryptedData = aesGcmDecrypt(message.cipherText, messageKey!!, associatedData)
+                decryptedString = String(decryptedData!!.copyOfRange(8, decryptedData.size))
+                timestampBytes = ByteBuffer.wrap(decryptedData.copyOfRange(0, 8)).long
+            }
+            messagesList.add(DecryptedMessage(message.messageId, message.publicKey, decryptedString!!, timestampBytes!!))
         }
 
         return messagesList
