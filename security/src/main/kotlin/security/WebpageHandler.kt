@@ -265,12 +265,12 @@ class MainVerticle : AbstractVerticle() {
                                 })
                                 .then(response => response.json())
                                 .then(data => {
-                                    alert(data.message);
+                                    alert(data);
                                     
                                     let encbox = document.getElementById('encryptedMessage');
                                     encbox.innerHTML = '';
-                                    
-                                    if (keepStructure == true) {
+                                     
+                                    if (keepStructure == "true") {
                                         let encmsgElement = document.createElement("p");
                                         encmsgElement.innerHTML = data.encryptedMessage;
                                         encbox.appendChild(encmsgElement);
@@ -465,9 +465,9 @@ class MainVerticle : AbstractVerticle() {
         val valuesToEncryptString = jsonBody.getString("valuesToEncryptString")
         val tripleGroupsToEncryptString = jsonBody.getString("tripleGroupsToEncryptString")
 
-        val encryptionLists = processEncryptionLists(valuesToEncryptString, tripleGroupsToEncryptString)
-        val valuesToEncrypt = if (keepStructure) encryptionLists.first else emptyList<String>()
-        val tripleGroupsToEncrypt = if (keepStructure) encryptionLists.second else emptyList<List<Statement>>()
+        val encryptionLists = if (keepStructure) processEncryptionLists(valuesToEncryptString, tripleGroupsToEncryptString) else Pair(emptyList(), emptyList())
+        val valuesToEncrypt = encryptionLists.first
+        val tripleGroupsToEncrypt = encryptionLists.second
 
         if (targetPodId != null && sender != null && message != null) {
             var encryptedMessage: String?
@@ -508,7 +508,7 @@ class MainVerticle : AbstractVerticle() {
             valuesToEncryptModel.read(StringReader(valuesToEncryptString), null, "JSON-LD")
             groupsToEncryptModel.read(StringReader(tripleGroupsToEncryptString), null, "JSON-LD")
         }
-        catch (error: Error) {
+        catch (e: Exception) {
             throw Error("No valid json was provided")
         }
         val encryptionConfigRes = valuesToEncryptModel.getResource("http://example.org/encryptionValues")
