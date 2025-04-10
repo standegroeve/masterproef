@@ -286,9 +286,6 @@ object RDFEncryptionProcessor {
             }
         }
 
-        println("Encryption print: ")
-        model.write(System.out, "TTL") // Debug print statement
-
         val writer = StringWriter()
         model.write(writer, "JSON-LD")
         return writer.toString()
@@ -505,11 +502,6 @@ object RDFEncryptionProcessor {
 
             UpdateAction.parseExecute(deleteQueryTriples, model)
         }
-
-        println("##############################################################################")
-        println("Decryption print: ")
-        println("##############################################################################")
-        println("")
 
         val writer = StringWriter()
         model.write(writer, "JSON-LD")
