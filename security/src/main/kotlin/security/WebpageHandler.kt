@@ -129,8 +129,6 @@ class MainVerticle : AbstractVerticle() {
                         <button onclick="processInitialMessage()">Process Initial Message</button>
                     </div>
                     <div class="top-section">
-                        <input type="checkbox" id="keepStructure">
-                        <label for="keepStructure">Keep Structure</label>
                         <input type="checkbox" id="groupMessage">
                         <label for="groupMessage">Send Group Message</label>
                     </div>
@@ -233,7 +231,6 @@ class MainVerticle : AbstractVerticle() {
                     function sendMessage(sender) {
                         const message = sender === 'alice' ? document.getElementById('aliceMessage').value : document.getElementById('bobMessage').value;
                         let authCode = document.getElementById('authCode').value;
-                        const keepStructure = document.getElementById('keepStructure').checked ? "true" : "false";
                         const valuesToEncryptString = document.getElementById('valuesToEncryptString').value;
                         const tripleGroupsToEncryptString = document.getElementById('tripleGroupsToEncryptString').value;
 
@@ -258,7 +255,6 @@ class MainVerticle : AbstractVerticle() {
                                         message: message,
                                         timestamp: timestamp,
                                         authCode: authCode,
-                                        keepStructure: keepStructure,
                                         valuesToEncryptString: valuesToEncryptString,
                                         tripleGroupsToEncryptString: tripleGroupsToEncryptString
                                     }),
@@ -270,11 +266,11 @@ class MainVerticle : AbstractVerticle() {
                                     let encbox = document.getElementById('encryptedMessage');
                                     encbox.innerHTML = '';
                                      
-                                    if (keepStructure == "true") {
-                                        let encmsgElement = document.createElement("p");
-                                        encmsgElement.innerHTML = data.encryptedMessage;
-                                        encbox.appendChild(encmsgElement);
-                                    }
+                                    
+                                    let encmsgElement = document.createElement("p");
+                                    encmsgElement.innerHTML = data.encryptedMessage;
+                                    encbox.appendChild(encmsgElement);
+                                    
                                     
                                     if (sender === 'alice') {
                                         document.getElementById('aliceMessage').value = ''; // Clear Alice's input field
@@ -297,7 +293,6 @@ class MainVerticle : AbstractVerticle() {
                     
                     function retrieveMessages(user) {
                         let authCode = document.getElementById('authCode').value;
-                        const keepStructure = document.getElementById('keepStructure').checked ? "true" : "false";
                         
                         fetch('/retrieveMessages', {
                                 method: 'POST',
@@ -307,8 +302,7 @@ class MainVerticle : AbstractVerticle() {
                                 body: JSON.stringify({
                                     pod: podName,
                                     user: user,
-                                    authCode: authCode,
-                                    keepStructure: keepStructure
+                                    authCode: authCode
                                 }),
                             })
                             .then(response => response.json())
@@ -459,13 +453,11 @@ class MainVerticle : AbstractVerticle() {
         val timestampString = jsonBody.getString("timestamp")
         val timestampBytes = ByteBuffer.allocate(8).putLong(timestampString.toLong()).array()
         val authCode = jsonBody.getString("authCode")
-        val keepStructureParam = jsonBody.getString("keepStructure")
-        val keepStructure = keepStructureParam != null && keepStructureParam == "true"
 
         val valuesToEncryptString = jsonBody.getString("valuesToEncryptString")
         val tripleGroupsToEncryptString = jsonBody.getString("tripleGroupsToEncryptString")
 
-        val encryptionLists = if (keepStructure) processEncryptionLists(valuesToEncryptString, tripleGroupsToEncryptString) else Pair(emptyList(), emptyList())
+        val encryptionLists = processEncryptionLists(valuesToEncryptString, tripleGroupsToEncryptString)
         val valuesToEncrypt = encryptionLists.first
         val tripleGroupsToEncrypt = encryptionLists.second
 
@@ -473,17 +465,17 @@ class MainVerticle : AbstractVerticle() {
             var encryptedMessage: String?
             if (isNotInitialized) {
                 if (sender == "alice") {
-                    encryptedMessage = Alice.sendInitialMessage(targetPodId, message.toByteArray(), timestampBytes, authCode, keepStructure, valuesToEncrypt, tripleGroupsToEncrypt)
+                    encryptedMessage = Alice.sendInitialMessage(targetPodId, message.toByteArray(), timestampBytes, authCode, valuesToEncrypt, tripleGroupsToEncrypt)
                     isNotInitialized = false
                 } else {
-                    encryptedMessage = Bob.sendInitialMessage(targetPodId, message.toByteArray(), timestampBytes, authCode, keepStructure, valuesToEncrypt, tripleGroupsToEncrypt)
+                    encryptedMessage = Bob.sendInitialMessage(targetPodId, message.toByteArray(), timestampBytes, authCode, valuesToEncrypt, tripleGroupsToEncrypt)
                     isNotInitialized = false
                 }
             } else {
                 if (sender == "alice") {
-                    encryptedMessage = Alice.sendMessage(targetPodId, message.toByteArray(), timestampBytes, authCode, keepStructure, valuesToEncrypt, tripleGroupsToEncrypt)
+                    encryptedMessage = Alice.sendMessage(targetPodId, message.toByteArray(), timestampBytes, authCode, valuesToEncrypt, tripleGroupsToEncrypt)
                 } else {
-                    encryptedMessage = Bob.sendMessage(targetPodId, message.toByteArray(), timestampBytes, authCode, keepStructure, valuesToEncrypt, tripleGroupsToEncrypt)
+                    encryptedMessage = Bob.sendMessage(targetPodId, message.toByteArray(), timestampBytes, authCode, valuesToEncrypt, tripleGroupsToEncrypt)
                 }
             }
             val jsonResponse = JsonObject()
@@ -536,11 +528,9 @@ class MainVerticle : AbstractVerticle() {
         val targetPodId = jsonBody.getString("pod")
         val user = jsonBody.getString("user")
         val authCode = jsonBody.getString("authCode")
-        val keepStructureParam = jsonBody.getString("keepStructure")
-        val keepStructure = keepStructureParam != null && keepStructureParam == "true"
 
         if (targetPodId != null && user != null) {
-            val messages = if (user == "alice") Alice.receiveMessage(targetPodId, authCode, keepStructure) else Bob.receiveMessage(targetPodId, authCode, keepStructure)
+            val messages = if (user == "alice") Alice.receiveMessage(targetPodId, authCode) else Bob.receiveMessage(targetPodId, authCode)
 
             val jsonResponse = JsonObject().put("messages", messages)
 
