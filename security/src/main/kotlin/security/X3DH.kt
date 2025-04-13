@@ -174,9 +174,9 @@ object X3DH {
             throw RuntimeException("TargetPrekeys were null")
         }
 
-        actor.initialDHPublicKey = targetPrekeys.publicSignedPreKey.encoded
-        actor.targetPublicKey = targetPrekeys.publicIdentityPreKeyX25519.encoded
-        actor.DHKeyPair = generateX25519KeyPair()
+        actor.initialDHPublicKeyMap!!.put(podId, targetPrekeys.publicSignedPreKey.encoded)
+        actor.targetPublicKeyMap!!.put(podId, targetPrekeys.publicIdentityPreKeyX25519.encoded)
+        actor.DHKeyPairMap!!.put(podId, generateX25519KeyPair())
 
         // Verify the signature
         val verified = xeddsa_verify(
@@ -216,8 +216,10 @@ object X3DH {
         /*
             Generate ciphertext
          */
-        val associatedData: ByteArray =
-            preKeys.publicIdentityPreKey.encoded + targetPrekeys.publicIdentityPreKeyX25519.encoded
+        val associatedData: ByteArray = preKeys.publicIdentityPreKey.encoded + targetPrekeys.publicIdentityPreKeyX25519.encoded
+
+        println("encodeedffdqfsdfds:$podId " + Base64.getEncoder().encodeToString(associatedData))
+
         val plaintext: ByteArray = "Handshake send initial message".toByteArray()
         val ciphertext = aesGcmEncrypt(plaintext, sharedKey, associatedData)
 
@@ -239,7 +241,7 @@ object X3DH {
     /*
         Fetch and process the initial message
      */
-    fun processInitialMessage(actor: User, podId: String, preKeys: X3DHPreKeys, authenticationCode: String): ByteArray {
+    fun processInitialMessage(actor: User, podId: String, preKeys: X3DHPreKeys, authenticationCode: String, sender: String): ByteArray {
         /*
             Fetch the initial message
          */
@@ -250,9 +252,9 @@ object X3DH {
             throw RuntimeException("InitialMessage was null")
         }
 
-        actor.DHKeyPair = Pair(actor.preKeys!!.publicSignedPrekey, actor.preKeys!!.privateSignedPrekey)
+        actor.DHKeyPairMap.put(sender, Pair(actor.preKeysMap.get(podId)!!.publicSignedPrekey, actor.preKeysMap.get(podId)!!.privateSignedPrekey))
 
-        actor.targetPublicKey = initialMessage.identityPreKey.encoded
+        actor.targetPublicKeyMap.put(sender, initialMessage.identityPreKey.encoded)
 
         /*
             Calculate sharedKey
@@ -274,8 +276,8 @@ object X3DH {
             sharedKey = HKDF(salt, F + DH1 + DH2 + DH3 + DH4, info, 32)
         }
 
-
         val associatedData: ByteArray = initialMessage.identityPreKey.encoded + preKeys.publicIdentityPreKey.encoded
+        println("encoded: " + Base64.getEncoder().encodeToString(associatedData))
 
         val plaintext = aesGcmDecrypt(initialMessage.initialCiphertext, sharedKey, associatedData)
 

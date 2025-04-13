@@ -10,17 +10,22 @@ import org.apache.jena.rdf.model.Statement
 import security.crypto.generatePrekeys
 import java.io.StringReader
 import java.nio.ByteBuffer
+import java.util.*
 
 class MainVerticle : AbstractVerticle() {
-    val Alice = User("alice")
-    val Bob = User("bob")
-    var isNotInitialized = true
+    val users= mutableListOf<User>()
 
     override fun start() {
         // Initialize Alice and Bob
-        Alice.preKeys = generatePrekeys()
-        Bob.preKeys = generatePrekeys()
+        users.add(User("alice"))
+        users.add(User("bob"))
+        users.add(User("carol"))
 
+        for (user in users) {
+            for (otherUser in users) {
+                user.preKeysMap[otherUser.podId] = generatePrekeys()
+            }
+        }
 
         // Create an HTTP server and router
         val router = Router.router(vertx)
@@ -29,16 +34,13 @@ class MainVerticle : AbstractVerticle() {
         // Serve the HTML page at the root URL
         router.get("/").handler(this::serveHtmlPage)
 
-        // Endpoint to generate new PreKeys
-        router.get("/generatePreKeys").handler(this::generatePreKeys)
-
         // Define the endpoint to initialize slices schema
-        router.get("/initializeSlices").handler(this::initializeSlices)
+        router.post("/initializeSlices").handler(this::initializeSlices)
 
         // Define the endpoints for X3DH
-        router.get("/uploadPreKeys").handler(this::uploadPreKeys)
-        router.get("/sendInitialMessage").handler(this::sendInitialMessage)
-        router.get("/processInitialMessage").handler(this::processInitialMessage)
+        router.post("/uploadPreKeys").handler(this::uploadPreKeys)
+        router.post("/sendInitialMessage").handler(this::sendInitialMessage)
+        router.post("/processInitialMessage").handler(this::processInitialMessage)
 
         // Define the endpoint to send a message
         router.post("/sendMessage").handler(this::sendMessage)
@@ -112,15 +114,13 @@ class MainVerticle : AbstractVerticle() {
             </head>
             <body>
                 <div class="container">
-                    <div>
-                        <button onclick="generatePreKeys('alice')">Generate Alice's PreKeys</button>
-                        <button onclick="generatePreKeys('bob')">Generate Bob's PreKeys</button>
-                    </div>
                     <div class="top-section">
                         <h1>Communication Pod</h1>
                         <label for="podName">Enter Target Pod Name:</label>
-                        <input type="text" id="podName" placeholder="Pod Name">
-                        <input type="text" id="authCode" placeholder="Authorization Code">
+                        <input type="text" id="sender" placeholder="Sender">
+                        <input type="text" id="authCodealice" placeholder="Authorization Code">
+                        <input type="text" id="authCodebob" placeholder="Authorization Code">
+                        <input type="text" id="authCodecarol" placeholder="Authorization Code">
                     </div>
                     <div class="top-section">
                         <button onclick="initializeSlices()">Initialize Slices</button>
@@ -131,10 +131,7 @@ class MainVerticle : AbstractVerticle() {
                     <div class="top-section">
                         <input type="checkbox" id="keepStructure">
                         <label for="keepStructure">Keep Structure</label>
-                        <input type="checkbox" id="groupMessage">
-                        <label for="groupMessage">Send Group Message</label>
                     </div>
-                    
                     <div class="grid-container">
                         <div class="grid-item">
                             <h3>Values that should be encrypted (uri's with prefix)</h3>
@@ -158,13 +155,14 @@ class MainVerticle : AbstractVerticle() {
                             <textarea id="bobMessage" placeholder="Enter Bob's message"></textarea>
                             <button onclick="sendMessage('bob')">Send</button>
                         </div>
+                        <div>
+                            <h2>Carol's Messages</h2>
+                            <textarea id="carolMessage" placeholder="Enter Carol's message"></textarea>
+                            <button onclick="sendMessage('carol')">Send</button>
+                        </div>
                     </div>
     
                     <div class="inbox-container">
-                        <div>
-                            <h3>Encryption message that was send</h3>
-                            <div id="encryptedMessage" class="inbox"></div>
-                        </div>
                         <div>
                             <h2>Alice's Inbox</h2>
                             <button onclick="retrieveMessages('alice')">Retrieve Messages</button>
@@ -175,77 +173,117 @@ class MainVerticle : AbstractVerticle() {
                             <button onclick="retrieveMessages('bob')">Retrieve Messages</button>
                             <div id="bobInbox" class="inbox"></div>
                         </div>
+                         <div>
+                            <h2>Carol's Inbox</h2>
+                            <button onclick="retrieveMessages('carol')">Retrieve Messages</button>
+                            <div id="carolInbox" class="inbox"></div>
+                        </div>
                     </div>
                 </div>
 
                 <script>
-                    let aliceInbox = [];
-                    let bobInbox = [];
-                    let podName = '';
-                    
-                    function generatePreKeys(user) {
-                        fetch('/generatePreKeys?user=' + user)
-                            .then(response => response.json())
-                            .then(data => alert(data.message))
-                            .catch(err => console.error('Error:', err));
-                    }
+                    let sender = '';
+                    let pods = ['alice', 'bob', 'carol'];
+                    let inboxes = {};
                     
                     function initializeSlices() {
-                        podName = document.getElementById('podName').value;
-                        let authCode = document.getElementById('authCode').value;
-                        if (podName && authCode) {
-                            fetch('/initializeSlices?pod=' + podName + '&authCode=' + authCode)
-                                .then(response => response.json())
-                                .then(data => {
-                                    alert(data.message);
-                                })
-                                .catch(err => console.error('Error:', err));
-                        } else {
-                            alert('Please enter both Pod Name and Authorization Code!');
-                        }
+                        const authCodes = [document.getElementById('authCodealice').value, document.getElementById('authCodebob').value, document.getElementById('authCodecarol').value];
+                        
+                        fetch('/initializeSlices', {
+                            method: 'POST',
+                            headers: {
+                               'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                pods: pods,
+                                authCodes: authCodes
+                            }),
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                             alert(data.message);
+                        })
+                        .catch(err => console.error('Error:', err));
                     }
                     
                     function uploadPreKeys() {
-                        podName = document.getElementById('podName').value;
-                        let authCode = document.getElementById('authCode').value;
-                        fetch('/uploadPreKeys?pod=' + podName + '&authCode=' + authCode)
-                            .then(response => response.json())
-                            .then(data => alert(data.message))
-                            .catch(err => console.error('Error:', err));
+                        const authCodes = [document.getElementById('authCodealice').value, document.getElementById('authCodebob').value, document.getElementById('authCodecarol').value];
+                        fetch('/uploadPreKeys', {
+                            method: 'POST',
+                            headers: {
+                            'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                pods: pods,
+                                authCodes: authCodes
+                            }),
+                        })
+                        .then(response => response.json())
+                        .then(data => alert(data.message))
+                        .catch(err => console.error('Error:', err));
                     }
+                    
                     function sendInitialMessage() {
-                        podName = document.getElementById('podName').value;
-                        let authCode = document.getElementById('authCode').value;
-                        fetch('/sendInitialMessage?pod=' + podName + '&authCode=' + authCode)
-                            .then(response => response.json())
-                            .then(data => alert(data.message))
-                            .catch(err => console.error('Error:', err));
+                        const authCodes = [document.getElementById('authCodealice').value, document.getElementById('authCodebob').value, document.getElementById('authCodecarol').value];
+                        sender = document.getElementById('sender').value;
+                        let podParam = encodeURIComponent(pods.join(','));
+                        let authParam = encodeURIComponent(authCodes.join(','));
+                        fetch('/sendInitialMessage', {
+                            method: 'POST',
+                            headers: {
+                               'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                pods: pods,
+                                authCodes: authCodes,
+                                sender: sender
+                            }),
+                        })
+                        .then(response => response.json())
+                        .then(data => alert(data.message))
+                        .catch(err => console.error('Error:', err));
                     }
                     function processInitialMessage() {
-                        podName = document.getElementById('podName').value;
-                        let authCode = document.getElementById('authCode').value;
-                        fetch('/processInitialMessage?pod=' + podName + '&authCode=' + authCode)
-                            .then(response => response.json())
-                            .then(data => alert(data.message))
-                            .catch(err => console.error('Error:', err));
+                        const authCodes = [document.getElementById('authCodealice').value, document.getElementById('authCodebob').value, document.getElementById('authCodecarol').value];
+                        let podParam = encodeURIComponent(pods.join(','));
+                        let authParam = encodeURIComponent(authCodes.join(','));
+                        fetch('/processInitialMessage', {
+                            method: 'POST',
+                            headers: {
+                               'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                pods: pods,
+                                authCodes: authCodes,
+                                sender: sender
+                            }),
+                        })
+                        .then(response => response.json())
+                        .then(data => alert(data.message))
+                        .catch(err => console.error('Error:', err));
                     }
 
                     function sendMessage(sender) {
-                        const message = sender === 'alice' ? document.getElementById('aliceMessage').value : document.getElementById('bobMessage').value;
-                        let authCode = document.getElementById('authCode').value;
+                        const authCodes = [document.getElementById('authCodealice').value, document.getElementById('authCodebob').value, document.getElementById('authCodecarol').value];
+                        const message = document.getElementById(sender + 'Message').value
                         const keepStructure = document.getElementById('keepStructure').checked ? "true" : "false";
                         const valuesToEncryptString = document.getElementById('valuesToEncryptString').value;
                         const tripleGroupsToEncryptString = document.getElementById('tripleGroupsToEncryptString').value;
 
+                        
 
                         if (message) {
                             const timestamp = Date.now();
                             
-                            if (sender === 'alice') {
-                                aliceInbox.push({ sender: sender, content: message, timestamp: timestamp });
-                            } else {
-                                bobInbox.push({ sender: sender, content: message, timestamp: timestamp });
+                            if (!inboxes[sender]) {
+                                inboxes[sender] = [];
                             }
+                            
+                            inboxes[sender].push({
+                                sender: sender,
+                                content: message,
+                                timestamp: timestamp
+                            });
                             
                             fetch('/sendMessage', {
                                     method: 'POST',
@@ -253,11 +291,11 @@ class MainVerticle : AbstractVerticle() {
                                         'Content-Type': 'application/json',
                                     },
                                     body: JSON.stringify({
-                                        pod: podName,
+                                        pods: pods,
                                         sender: sender,
                                         message: message,
                                         timestamp: timestamp,
-                                        authCode: authCode,
+                                        authCodes: authCodes,
                                         keepStructure: keepStructure,
                                         valuesToEncryptString: valuesToEncryptString,
                                         tripleGroupsToEncryptString: tripleGroupsToEncryptString
@@ -267,22 +305,13 @@ class MainVerticle : AbstractVerticle() {
                                 .then(data => {
                                     alert(data);
                                     
-                                    let encbox = document.getElementById('encryptedMessage');
-                                    encbox.innerHTML = '';
-                                     
-                                    if (keepStructure == "true") {
-                                        let encmsgElement = document.createElement("p");
-                                        encmsgElement.innerHTML = data.encryptedMessage;
-                                        encbox.appendChild(encmsgElement);
-                                    }
-                                    
-                                    if (sender === 'alice') {
-                                        document.getElementById('aliceMessage').value = ''; // Clear Alice's input field
-                                    } else {
-                                        document.getElementById('bobMessage').value = ''; // Clear Bob's input field
-                                    }
+                                    document.getElementById('aliceMessage').value = ''; // Clear Alice's input field
+                                    document.getElementById('bobMessage').value = ''; // Clear Bob's input field
+                                    document.getElementById('carolMessage').value = ''; // Clear Bob's input field
+                                   
                                     // add to own inbox
-                                    const inbox = sender === 'alice' ? document.getElementById('aliceInbox') : document.getElementById('bobInbox');
+                                    const inbox = document.getElementById(sender + 'Inbox')
+                                    
                                     let msgElement = document.createElement("p");
                                     msgElement.innerHTML = "<strong>" + sender.charAt(0).toUpperCase() + sender.slice(1) + ":</strong> " + message + ', ' + timestamp;
                                     
@@ -296,7 +325,7 @@ class MainVerticle : AbstractVerticle() {
                     }
                     
                     function retrieveMessages(user) {
-                        let authCode = document.getElementById('authCode').value;
+                        const authCodes = [document.getElementById('authCodealice').value, document.getElementById('authCodebob').value, document.getElementById('authCodecarol').value];
                         const keepStructure = document.getElementById('keepStructure').checked ? "true" : "false";
                         
                         fetch('/retrieveMessages', {
@@ -305,17 +334,18 @@ class MainVerticle : AbstractVerticle() {
                                     'Content-Type': 'application/json',
                                 },
                                 body: JSON.stringify({
-                                    pod: podName,
+                                    pods: pods,
                                     user: user,
-                                    authCode: authCode,
+                                    authCodes: authCodes,
                                     keepStructure: keepStructure
                                 }),
                             })
                             .then(response => response.json())
                             .then(data => {
-                                const inbox = user === 'alice' ? aliceInbox : bobInbox;
-                                const receiver = user === "alice" ? "alice" : "bob";
-                                const sender = user === 'alice' ? 'bob' : 'alice';
+                                console.log(data)
+                                const receiver = user
+                                const sender = data.sender
+                                const inbox = inboxes[sender];
 
                                 data.messages.forEach(msg => {
                                     const plainText = msg.plainText
@@ -330,8 +360,8 @@ class MainVerticle : AbstractVerticle() {
                     }
                     
                     function displayMessages(receiver) {
-                        const messages = receiver === 'alice' ? aliceInbox : bobInbox
-                        const inbox = receiver === 'alice' ? document.getElementById('aliceInbox') : document.getElementById('bobInbox');
+                        const messages = inboxes[receiver]
+                        const inbox = document.getElementById(receiver + 'Inbox')
                         
                         inbox.innerHTML = '';
                         messages.sort((a,b) => a.timestamp - b.timestamp);
@@ -352,98 +382,111 @@ class MainVerticle : AbstractVerticle() {
     }
 
     /*
-        Generate new PreKeys
-     */
-    private fun generatePreKeys(ctx: RoutingContext) {
-        val user = ctx.request().getParam("user")
-
-        if (user == "alice") {
-            Alice.preKeys = generatePrekeys()
-            ctx.response().putHeader("Content-Type", "application/json")
-                .end("{\"message\": \"New prekeys generated for Alice\"}")
-        } else if (user == "bob") {
-            Bob.preKeys = generatePrekeys()
-            ctx.response().putHeader("Content-Type", "application/json")
-                .end("{\"message\": \"New prekeys generated for Bob\"}")
-        } else {
-            ctx.response().putHeader("Content-Type", "application/json")
-                .end("{\"message\": \"Invalid user!\"}")
-        }
-    }
-
-    /*
         Initialize the slices schema for the PreKeys and the InitialMessage
      */
     private fun initializeSlices(ctx: RoutingContext) {
-        val targetPodId = ctx.request().getParam("pod")
-        val authCode = ctx.request().getParam("authCode")
+        val jsonBody = ctx.body().asJsonObject()
 
-        if (targetPodId != null && authCode != null) {
-            // Placeholder for initializing slices schema
-            X3DH.initiateSliceSchema(targetPodId, authCode)
+        val targetPodIds = jsonBody.getJsonArray("pods")
+        val authCodes = jsonBody.getJsonArray("authCodes")
 
-            ctx.response()
-                .putHeader("Content-Type", "application/json")
-                .end("{\"message\": \"Initiate slices to $targetPodId pod\"}")
-        } else {
-            ctx.response()
-                .putHeader("Content-Type", "application/json")
-                .end("{\"message\": \"Pod name and authentication code is required to initiate slices!\"}")
+        try {
+            for (i in 0..targetPodIds.size() - 1) {
+                X3DH.initiateSliceSchema(targetPodIds.getString(i), authCodes.getString(i))
+            }
         }
+        catch (e: Exception) {
+            println(e)
+        }
+            // Placeholder for initializing slices schema
+        ctx.response()
+            .putHeader("Content-Type", "application/json")
+            .end("{\"message\": \"Initiate slices to targetpods\"}")
+
     }
 
     /*
         Upload the new PreKeys
      */
     private fun uploadPreKeys(ctx: RoutingContext) {
-        val targetPodId = ctx.request().getParam("pod")
-        val authCode = ctx.request().getParam("authCode")
-        val user = if (targetPodId == "alice") Alice else Bob
+        val jsonBody = ctx.body().asJsonObject()
 
-        if (authCode != null) {
-            X3DH.uploadPreKeys(targetPodId, user.preKeys!!.getPublic(), authCode)
-            ctx.response().putHeader("Content-Type", "application/json")
-                .end("{\"message\": \"PreKeys uploaded for $targetPodId\"}")
-        } else {
-            ctx.response().putHeader("Content-Type", "application/json")
-                .end("{\"message\": \"Authentication code is required!\"}")
+        val targetPodIds = jsonBody.getJsonArray("pods")
+        val authCodes = jsonBody.getJsonArray("authCodes")
+
+        println(targetPodIds)
+        println(authCodes)
+        println(users)
+
+
+
+        for (i in 0..targetPodIds.size() - 1) {
+            X3DH.uploadPreKeys(targetPodIds.getString(i), users.get(i).preKeysMap.get(targetPodIds.getString(i))!!.getPublic(), authCodes.getString(i))
         }
+
+
+        ctx.response().putHeader("Content-Type", "application/json")
+            .end("{\"message\": \"PreKeys uploaded for targetPodIds\"}")
+
     }
 
     /*
         Send the initial message
      */
     private fun sendInitialMessage(ctx: RoutingContext) {
-        val targetPodId = ctx.request().getParam("pod")
-        val authCode = ctx.request().getParam("authCode")
-        val user = if (targetPodId == "alice") Bob else Alice
+        val jsonBody = ctx.body().asJsonObject()
 
-        if (authCode != null) {
-            user.sharedKey = X3DH.sendInitialMessage(user, targetPodId, user.preKeys!!, authCode)
-            ctx.response().putHeader("Content-Type", "application/json")
-                .end("{\"message\": \"Initial message sent for $targetPodId\"}")
-        } else {
-            ctx.response().putHeader("Content-Type", "application/json")
-                .end("{\"message\": \"Authentication code is required!\"}")
+        val targetPodIds = jsonBody.getJsonArray("pods")
+        val authCodes = jsonBody.getJsonArray("authCodes")
+        val sender = jsonBody.getString("sender")
+        val senderIndex = targetPodIds.indexOf(sender)
+
+        try {
+            for (i in 0 until targetPodIds.size()) {
+                println(users.get(senderIndex).preKeysMap)
+                if (!targetPodIds.getString(i).equals(sender) && !users.get(senderIndex).sharedKeysMap.containsKey(targetPodIds.getString(i))) {
+                    users.get(senderIndex).sharedKeysMap.put(targetPodIds.getString(i), X3DH.sendInitialMessage(users.get(senderIndex), targetPodIds.getString(i), users.get(senderIndex).preKeysMap.get(targetPodIds.getString(i))!!, authCodes.getString(i)))
+                }
+            }
         }
+        catch (e: Exception) {
+            println(e)
+        }
+
+        ctx.response().putHeader("Content-Type", "application/json")
+            .end("{\"message\": \"Initial message sent for targetPodIds\"}")
     }
 
     /*
         Process the initial message
      */
     private fun processInitialMessage(ctx: RoutingContext) {
-        val targetPodId = ctx.request().getParam("pod")
-        val authCode = ctx.request().getParam("authCode")
-        val user = if (targetPodId == "alice") Alice else Bob
+        val jsonBody = ctx.body().asJsonObject()
 
-        if (targetPodId != null && authCode != null) {
-            user.sharedKey = X3DH.processInitialMessage(user, targetPodId, user.preKeys!!, authCode)
-            ctx.response().putHeader("Content-Type", "application/json")
-                .end("{\"message\": \"Initial message processed for $targetPodId\"}")
-        } else {
-            ctx.response().putHeader("Content-Type", "application/json")
-                .end("{\"message\": \"Authentication code is required!\"}")
+        val targetPodIds = jsonBody.getJsonArray("pods")
+        val authCodes = jsonBody.getJsonArray("authCodes")
+        val sender = jsonBody.getString("sender")
+        val senderIndex = targetPodIds.indexOf(sender)
+
+        println(targetPodIds.size())
+
+        try {
+            for (i in 0 until targetPodIds.size()) {
+                println(targetPodIds.getString(i))
+                println("a: " + users.get(senderIndex).sharedKeysMap)
+                if (!targetPodIds.getString(i).equals(sender) && !users.get(i).sharedKeysMap.containsKey(targetPodIds.getString(senderIndex))) {
+                    users.get(i).sharedKeysMap.put(sender, X3DH.processInitialMessage(users.get(i), targetPodIds.getString(i), users.get(i).preKeysMap.get(targetPodIds.getString(i))!!, authCodes.getString(i), sender))
+                }
+            }
         }
+        catch (e: Exception) {
+            println(e)
+        }
+
+
+        ctx.response().putHeader("Content-Type", "application/json")
+            .end("{\"message\": \"Initial message processed for targetPodIds\"}")
+
     }
 
     /*
@@ -453,12 +496,12 @@ class MainVerticle : AbstractVerticle() {
     private fun sendMessage(ctx: RoutingContext) {
         val jsonBody = ctx.body().asJsonObject()
 
-        val targetPodId = jsonBody.getString("pod")
+        val targetPodIds = jsonBody.getJsonArray("pods")
         val sender = jsonBody.getString("sender")
         val message = jsonBody.getString("message")
         val timestampString = jsonBody.getString("timestamp")
         val timestampBytes = ByteBuffer.allocate(8).putLong(timestampString.toLong()).array()
-        val authCode = jsonBody.getString("authCode")
+        val authCodes = jsonBody.getJsonArray("authCodes")
         val keepStructureParam = jsonBody.getString("keepStructure")
         val keepStructure = keepStructureParam != null && keepStructureParam == "true"
 
@@ -469,35 +512,31 @@ class MainVerticle : AbstractVerticle() {
         val valuesToEncrypt = encryptionLists.first
         val tripleGroupsToEncrypt = encryptionLists.second
 
-        if (targetPodId != null && sender != null && message != null) {
-            var encryptedMessage: String?
-            if (isNotInitialized) {
-                if (sender == "alice") {
-                    encryptedMessage = Alice.sendInitialMessage(targetPodId, message.toByteArray(), timestampBytes, authCode, keepStructure, valuesToEncrypt, tripleGroupsToEncrypt)
-                    isNotInitialized = false
-                } else {
-                    encryptedMessage = Bob.sendInitialMessage(targetPodId, message.toByteArray(), timestampBytes, authCode, keepStructure, valuesToEncrypt, tripleGroupsToEncrypt)
-                    isNotInitialized = false
-                }
-            } else {
-                if (sender == "alice") {
-                    encryptedMessage = Alice.sendMessage(targetPodId, message.toByteArray(), timestampBytes, authCode, keepStructure, valuesToEncrypt, tripleGroupsToEncrypt)
-                } else {
-                    encryptedMessage = Bob.sendMessage(targetPodId, message.toByteArray(), timestampBytes, authCode, keepStructure, valuesToEncrypt, tripleGroupsToEncrypt)
+        for (user in users) {
+            println(user.sharedKeysMap)
+        }
+
+        try{
+            for (user in users) {
+                if (user.podId != sender) {
+                    val senderIndex = targetPodIds.indexOf(sender)
+                    if (users.get(senderIndex).sendingKeyMap.isEmpty() || !users.get(senderIndex).sendingKeyMap.containsKey(user.podId)) {
+                        users.get(senderIndex).sendInitialMessage(user.podId, message.toByteArray(), timestampBytes, authCodes.getString(targetPodIds.indexOf(user.podId)), keepStructure, valuesToEncrypt, tripleGroupsToEncrypt)
+                    }
+                    else {
+                        users.get(senderIndex).sendInitialMessage(user.podId, message.toByteArray(), timestampBytes, authCodes.getString(targetPodIds.indexOf(user.podId)), keepStructure, valuesToEncrypt, tripleGroupsToEncrypt)
+                    }
                 }
             }
-            val jsonResponse = JsonObject()
-                .put("message", "Message sent from $sender to $targetPodId pod")
-                .put("encryptedMessage", encryptedMessage)
-
-            ctx.response()
-                .putHeader("Content-Type", "application/json")
-                .end(jsonResponse.encode())
-        } else {
-            ctx.response()
-                .putHeader("Content-Type", "application/json")
-                .end("{\"message\": \"All parameters (pod, sender, message) are required!\"}")
         }
+        catch (e: Exception) {
+            println(e)
+        }
+        val jsonResponse = JsonObject()
+            .put("message", "Message sent from $sender to targetPodIds pod")
+        ctx.response()
+            .putHeader("Content-Type", "application/json")
+            .end(jsonResponse.encode())
     }
 
     private fun processEncryptionLists(valuesToEncryptString: String, tripleGroupsToEncryptString: String): Pair<List<String>, List<List<Statement>>> {
@@ -533,24 +572,34 @@ class MainVerticle : AbstractVerticle() {
     private fun retrieveMessages(ctx: RoutingContext) {
         val jsonBody = ctx.body().asJsonObject()
 
-        val targetPodId = jsonBody.getString("pod")
+        ///// return sender
+
+        val targetPodIds = jsonBody.getJsonArray("pods")
         val user = jsonBody.getString("user")
-        val authCode = jsonBody.getString("authCode")
+        val userIndex = targetPodIds.indexOf(user)
+        val authCodes = jsonBody.getJsonArray("authCodes")
         val keepStructureParam = jsonBody.getString("keepStructure")
         val keepStructure = keepStructureParam != null && keepStructureParam == "true"
 
-        if (targetPodId != null && user != null) {
-            val messages = if (user == "alice") Alice.receiveMessage(targetPodId, authCode, keepStructure) else Bob.receiveMessage(targetPodId, authCode, keepStructure)
+        println(users.get(1).targetPublicKeyMap)
 
-            val jsonResponse = JsonObject().put("messages", messages)
+        for (target in users) {
+            if (target.podId != user) {
+                try {
+                    val messages = users.get(userIndex).receiveMessage(target.podId, authCodes.getString(userIndex), keepStructure)
 
-            ctx.response()
-                .putHeader("Content-Type", "application/json")
-                .end(jsonResponse.encode())
-        } else {
-            ctx.response()
-                .putHeader("Content-Type", "application/json")
-                .end("{\"message\": \"Pod name and user are required to retrieve messages!\"}")
+                    val jsonResponse = JsonObject().put("messages", messages).put("sender", target.podId)
+
+                    ctx.response()
+                        .putHeader("Content-Type", "application/json")
+                        .end(jsonResponse.encode())
+                    break
+                }
+                catch (e: Exception) {
+                    println(e)
+                    continue
+                }
+            }
         }
     }
 }

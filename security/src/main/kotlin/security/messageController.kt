@@ -44,9 +44,9 @@ object messageController {
         }
     }
 
-    fun retrieveMessages(retrieverPodId: String, targetPodId: String, latestReceivedMessageId: Int, skippedKeys: Map<Int, ByteArray>, authenticationCode: String): List<EncryptedMessage> {
+    fun retrieveMessages(retrieverPodId: String, latestReceivedMessageId: Int, skippedKeys: Map<Int, ByteArray>, authenticationCode: String): List<EncryptedMessage> {
         val requestGet = Request.Builder()
-            .url("http://localhost:8080/${targetPodId}/messages")
+            .url("http://localhost:8080/${retrieverPodId}/messages")
             .get()
             .header("Authorization", "Bearer $authenticationCode")
             .build()
@@ -62,7 +62,7 @@ object messageController {
 
             val responseMap: Map<String, Any> = objectMapper.readValue(responseBody)
 
-            val key = if (retrieverPodId == targetPodId) "kss:messageInbox" else "kss:messageOutbox"
+            val key = "kss:messageInbox"
 
             val encryptedMessageList = responseMap[key]
 

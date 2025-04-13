@@ -5,6 +5,7 @@ import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters
 import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters
 import org.bouncycastle.crypto.params.X25519PrivateKeyParameters
 import org.bouncycastle.crypto.params.X25519PublicKeyParameters
+import security.User
 import security.messages.X3DHPreKeys
 import java.math.BigInteger
 import java.security.SecureRandom
