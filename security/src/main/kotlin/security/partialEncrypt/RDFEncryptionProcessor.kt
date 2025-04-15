@@ -51,6 +51,7 @@ object RDFEncryptionProcessor {
         model.read(StringReader(jsonString), "http://example.org/", "JSON-LD")
 
         var currentChar = 'A'
+        var currentCharPrefix = ""
         var currentReificationNumber = 1
 
         //////////////////////////////////
@@ -75,13 +76,19 @@ object RDFEncryptionProcessor {
                 renc_datatype = "rdf:Resource"
             ).toString()
 
-            model.add(model.createResource("_:$currentChar"), model.createProperty("renc:encTriples"), model.createLiteral(ECString))
-            model.add(group.first().subject, model.createProperty("renc:triples"), model.createLiteral("_:$currentChar"))
-            model.add(group.first().subject, model.createProperty("http://www.w3.org/ns/renc#triples"), model.createLiteral("_:$currentChar"))
+            model.add(model.createResource("_:$currentCharPrefix$currentChar"), model.createProperty("renc:encTriples"), model.createLiteral(ECString))
+            model.add(group.first().subject, model.createProperty("renc:triples"), model.createLiteral("_:$currentCharPrefix$currentChar"))
+            model.add(group.first().subject, model.createProperty("http://www.w3.org/ns/renc#triples"), model.createLiteral("_:$currentCharPrefix$currentChar"))
 
             model.remove(group)
 
-            currentChar++
+            if (currentChar == 'Z') {
+                currentCharPrefix += "A"
+                currentChar = 'A'
+            }
+            else {
+                currentChar++
+            }
         }
 
         for (value in valuesToEncrypt) {
@@ -134,7 +141,7 @@ object RDFEncryptionProcessor {
                     """.trimIndent()
 
 
-                model.add(model.createResource("_:$currentChar"), model.createProperty("renc:encNLabel"), model.createLiteral(EC(
+                model.add(model.createResource("_:$currentCharPrefix$currentChar"), model.createProperty("renc:encNLabel"), model.createLiteral(EC(
                     `@value` = Base64.getEncoder().encodeToString(encryptedObject),
                     renc_datatype = result.getLiteral("o").datatype.uri,
                 ).toString()))
@@ -142,7 +149,7 @@ object RDFEncryptionProcessor {
                 val statement = model.createStatement(
                     model.createResource("http://example.org/reificationQuad$currentReificationNumber"),
                     model.createProperty("renc:encPredicate"),
-                    model.createLiteral("_:$currentChar")
+                    model.createLiteral("_:$currentCharPrefix$currentChar")
                 )
 
                 val reifiedStatement = statement.createReifiedStatement("http://example.org/reificationQuad$currentReificationNumber")
@@ -151,7 +158,13 @@ object RDFEncryptionProcessor {
                     renc_datatype = XSDDatatype.XSDstring.uri,
                 ).toString())
 
-                currentChar++
+                if (currentChar == 'Z') {
+                    currentCharPrefix += "A"
+                    currentChar = 'A'
+                }
+                else {
+                    currentChar++
+                }
                 currentReificationNumber++
 
                 UpdateAction.parseExecute(updateQuery, model)
@@ -189,13 +202,13 @@ object RDFEncryptionProcessor {
                         PREFIX ex: <http://example.org/>
                         PREFIX renc: <http://www.w3.org/ns/renc#>
                         DELETE { <$subjectValue> <$predicateValue> "$value" }
-                        INSERT { <$subjectValue> <$predicateValue> "_:$currentChar" }
+                        INSERT { <$subjectValue> <$predicateValue> "_:$currentCharPrefix$currentChar" }
                         WHERE {
                             <$subjectValue> <$predicateValue> "$value" .
                         }
                     """.trimIndent()
 
-                model.add(model.createResource("_:$currentChar"), model.createProperty("renc:encNLabel"), model.createLiteral(EC(
+                model.add(model.createResource("_:$currentCharPrefix$currentChar"), model.createProperty("renc:encNLabel"), model.createLiteral(EC(
                     `@value` = Base64.getEncoder().encodeToString(encryptedObject),
                     renc_datatype = XSDDatatype.XSDstring.uri
                 ).toString()))
@@ -204,7 +217,15 @@ object RDFEncryptionProcessor {
                 UpdateAction.parseExecute(updateQuery, model)
             }
 
-            if (resultsListObj.isNotEmpty()) currentChar++
+            if (resultsListObj.isNotEmpty()) {
+                if (currentChar == 'Z') {
+                    currentCharPrefix += "A"
+                    currentChar = 'A'
+                }
+                else {
+                    currentChar++
+                }
+            }
 
             queryExecObj.close()
 
@@ -238,7 +259,7 @@ object RDFEncryptionProcessor {
                 model.remove(resultsListSubj)
 
                 model.add(
-                    model.createResource("_:$currentChar"), model.createProperty("renc:encNLabel"), model.createLiteral(
+                    model.createResource("_:$currentCharPrefix$currentChar"), model.createProperty("renc:encNLabel"), model.createLiteral(
                         EC(
                             `@value` = Base64.getEncoder().encodeToString(encryptedSubject),
                             renc_datatype = "rdf:Resource"
@@ -271,7 +292,7 @@ object RDFEncryptionProcessor {
                             PREFIX ex: <http://example.org/>
                             PREFIX renc: <http://www.w3.org/ns/renc#>
                             DELETE { <$subjectValue> <$predicateValue> <$value> }
-                            INSERT { <$subjectValue> <$predicateValue> "_:$currentChar" }
+                            INSERT { <$subjectValue> <$predicateValue> "_:$currentCharPrefix$currentChar" }
                             WHERE {
                                 <$subjectValue> <$predicateValue> <$value> .
                             }
@@ -280,7 +301,15 @@ object RDFEncryptionProcessor {
                     UpdateAction.parseExecute(updateQuery, model)
                 }
 
-                if (resultsListSubjAsObj.isNotEmpty()) currentChar++
+                if (resultsListSubjAsObj.isNotEmpty()) {
+                    if (currentChar == 'Z') {
+                        currentCharPrefix += "A"
+                        currentChar = 'A'
+                    }
+                    else {
+                        currentChar++
+                    }
+                }
 
                 queryExecSubjAsObj.close()
             }
@@ -335,6 +364,8 @@ object RDFEncryptionProcessor {
         for (result in resultsListPred) {
             val subjectValue = result.getResource("s")
             val objectValue = result.get("o") as Resource
+
+            val test = model.nsPrefixMap
 
             val newObject = model.listStatements(objectValue, model.createProperty("http://www.w3.org/1999/02/22-rdf-syntax-ns#object"), null as RDFNode?).toList().first().`object`
             val encPLabel = model.listStatements(objectValue, model.createProperty("http://www.w3.org/ns/renc#encPLabel"), null as RDFNode?).toList().first().`object`
@@ -471,8 +502,9 @@ object RDFEncryptionProcessor {
 
             val decryptedString = String(decryptedValue!!.copyOfRange(8, decryptedValue.size))
 
-            if (timestampBytes == null) timestampBytes = decryptedValue.copyOfRange(0, 8).toString().toLong()
-
+            if (timestampBytes == null) timestampBytes = decryptedValue.copyOfRange(0, 8).fold(0L) { acc, byte ->
+                (acc shl 8) or (byte.toLong() and 0xFF)
+            }
 
             val parserModel = ModelFactory.createDefaultModel()
             parserModel.read(StringReader(decryptedString), "http://example.org/", "Turtle")

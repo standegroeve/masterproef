@@ -1,0 +1,385 @@
+[ {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 1527,
+  "durationNs" : 3097900
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 1527,
+  "durationNs" : 337632900
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 2952,
+  "durationNs" : 1379400
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 2952,
+  "durationNs" : 203871900
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 4377,
+  "durationNs" : 1037100
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 4377,
+  "durationNs" : 245319100
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 5802,
+  "durationNs" : 1357200
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 5802,
+  "durationNs" : 312042400
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 7227,
+  "durationNs" : 1304300
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 7227,
+  "durationNs" : 171796400
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 8652,
+  "durationNs" : 935600
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 8652,
+  "durationNs" : 158070300
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 10077,
+  "durationNs" : 1109000
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 10077,
+  "durationNs" : 165190400
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 11502,
+  "durationNs" : 1683600
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 11502,
+  "durationNs" : 232941600
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 12927,
+  "durationNs" : 1731100
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 12927,
+  "durationNs" : 191705900
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 14352,
+  "durationNs" : 1522500
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 14352,
+  "durationNs" : 259344400
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 15807,
+  "durationNs" : 877000
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 15807,
+  "durationNs" : 298445200
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 17262,
+  "durationNs" : 1609200
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 17262,
+  "durationNs" : 355742100
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 18717,
+  "durationNs" : 1660200
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 18717,
+  "durationNs" : 261719800
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 20172,
+  "durationNs" : 921600
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 20172,
+  "durationNs" : 275587800
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 21627,
+  "durationNs" : 923300
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 21627,
+  "durationNs" : 276058000
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 23082,
+  "durationNs" : 1044800
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 23082,
+  "durationNs" : 332364500
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 24537,
+  "durationNs" : 1874300
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 24537,
+  "durationNs" : 436622700
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 25992,
+  "durationNs" : 2951100
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 25992,
+  "durationNs" : 346977900
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 27447,
+  "durationNs" : 1295400
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 27447,
+  "durationNs" : 273201400
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 28902,
+  "durationNs" : 841500
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 28902,
+  "durationNs" : 249872500
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 30357,
+  "durationNs" : 1822100
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 30357,
+  "durationNs" : 318552800
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 31812,
+  "durationNs" : 1158200
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 31812,
+  "durationNs" : 328308200
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 33267,
+  "durationNs" : 1017700
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 33267,
+  "durationNs" : 276816600
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 34722,
+  "durationNs" : 1292800
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 34722,
+  "durationNs" : 331213100
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 36177,
+  "durationNs" : 1356700
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 36177,
+  "durationNs" : 259658200
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 37632,
+  "durationNs" : 1413300
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 37632,
+  "durationNs" : 232558800
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 39087,
+  "durationNs" : 1452200
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 39087,
+  "durationNs" : 258239300
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 40542,
+  "durationNs" : 1278100
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 40542,
+  "durationNs" : 179962300
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 41997,
+  "durationNs" : 1162700
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 41997,
+  "durationNs" : 223419000
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 43452,
+  "durationNs" : 1189200
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 43452,
+  "durationNs" : 235450200
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 44907,
+  "durationNs" : 733800
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 44907,
+  "durationNs" : 264963000
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 46362,
+  "durationNs" : 914800
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 46362,
+  "durationNs" : 247905100
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 47817,
+  "durationNs" : 1075600
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 47817,
+  "durationNs" : 311149900
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 49272,
+  "durationNs" : 737600
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 49272,
+  "durationNs" : 246341400
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 50727,
+  "durationNs" : 759400
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 50727,
+  "durationNs" : 261169000
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 52182,
+  "durationNs" : 802100
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 52182,
+  "durationNs" : 269824300
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 53637,
+  "durationNs" : 1124300
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 53637,
+  "durationNs" : 243696300
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 55092,
+  "durationNs" : 853000
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 55092,
+  "durationNs" : 236995500
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 56547,
+  "durationNs" : 1084900
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 56547,
+  "durationNs" : 250789700
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 58002,
+  "durationNs" : 866200
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 58002,
+  "durationNs" : 236952400
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 59457,
+  "durationNs" : 951700
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 59457,
+  "durationNs" : 296701300
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 60912,
+  "durationNs" : 992800
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 60912,
+  "durationNs" : 317704400
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 62367,
+  "durationNs" : 938100
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 62367,
+  "durationNs" : 336630800
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 63822,
+  "durationNs" : 1260300
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 63822,
+  "durationNs" : 306764800
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 65277,
+  "durationNs" : 977400
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 65277,
+  "durationNs" : 327887800
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 66732,
+  "durationNs" : 1473700
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 66732,
+  "durationNs" : 387575300
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 68187,
+  "durationNs" : 1294700
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 68187,
+  "durationNs" : 394173300
+}, {
+  "encryptionType" : "Atomic Encryption",
+  "sizeInBytes" : 69642,
+  "durationNs" : 1017000
+}, {
+  "encryptionType" : "Partial Encryption",
+  "sizeInBytes" : 69642,
+  "durationNs" : 414787600
+} ]

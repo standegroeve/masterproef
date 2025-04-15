@@ -216,8 +216,7 @@ object X3DH {
         /*
             Generate ciphertext
          */
-        val associatedData: ByteArray =
-            preKeys.publicIdentityPreKey.encoded + targetPrekeys.publicIdentityPreKeyX25519.encoded
+        val associatedData: ByteArray = preKeys.publicIdentityPreKey.encoded + targetPrekeys.publicIdentityPreKeyX25519.encoded
         val plaintext: ByteArray = "Handshake send initial message".toByteArray()
         val ciphertext = aesGcmEncrypt(plaintext, sharedKey, associatedData)
 
