@@ -157,13 +157,14 @@ class User(val podId: String) {
                 }
 
                 println("check4")
+                println(preKeysMap)
 
                 receivedMessageIdMap.put(podToTry, receivedMessageIdMap.get(podToTry)?.plus(1) ?: 0)
                 // generates the new receivingKey
                 val messageKey = KeyRatchet.SymmetricKeyRatchetNonRoot(this, false, podToTry)
 
                 // associatedData = Ephemeral publicKey + public id key Alice + public id Key bob
-                val associatedData = message.publicKey + targetPublicKeyMap.get(podToTry)!! + preKeysMap.get(podToTry)!!.publicIdentityPreKey.encoded
+                val associatedData = message.publicKey + targetPublicKeyMap.get(podToTry)!! + preKeysMap.get(podId)!!.publicIdentityPreKey.encoded
 
                 println("podtoTry: $podToTry")
                 println("$podId key: ${Base64.getEncoder().encodeToString(messageKey)}")

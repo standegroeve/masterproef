@@ -345,7 +345,12 @@ class MainVerticle : AbstractVerticle() {
                                 console.log(data)
                                 const receiver = user
                                 const sender = data.sender
-                                const inbox = inboxes[sender];
+                                
+                                if (!inboxes[receiver]) {
+                                    inboxes[receiver] = [];
+                                }
+                                
+                                const inbox = inboxes[receiver];
 
                                 data.messages.forEach(msg => {
                                     const plainText = msg.plainText
