@@ -1,0 +1,25 @@
+package security.benchmarks
+
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import java.io.File
+
+
+fun main() {
+    val tripleCount = 100
+    val authCode = "eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJaTk5xVnQ0TGlwVi1zQVZ5Z3lrRTlHR2RyWGlqSkl4SmxjV0JaU0cyVDBjIn0.eyJleHAiOjE3NDQ5NDI1MDAsImlhdCI6MTc0NDkyNDUwMCwiYXV0aF90aW1lIjoxNzQ0OTI0NDgwLCJqdGkiOiIxNjE3YjVkYS0yZmE2LTRhMTgtYTIxOS1kZWFmYzY2Yzc4ZmQiLCJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjgyODAvcmVhbG1zL2JvYiIsImF1ZCI6ImFjY291bnQiLCJzdWIiOiJmNjE5Y2M2ZC0wNmE4LTQyZjItYjE2Ni0xMDgwNmIyYTdhYzIiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJwdWJsaWMtY2xpZW50Iiwic2lkIjoiZjRmNzdjMjctZGY5OS00MmFlLWFmNjctODVhNDZmZjAxMGMwIiwiYWNyIjoiMSIsImFsbG93ZWQtb3JpZ2lucyI6WyJodHRwOi8vbG9jYWxob3N0OjQyMDAiXSwicmVhbG1fYWNjZXNzIjp7InJvbGVzIjpbIm93bmVyIiwiZGVmYXVsdC1yb2xlcy1ib2IiLCJvZmZsaW5lX2FjY2VzcyIsInVtYV9hdXRob3JpemF0aW9uIl19LCJyZXNvdXJjZV9hY2Nlc3MiOnsiYWNjb3VudCI6eyJyb2xlcyI6WyJtYW5hZ2UtYWNjb3VudCIsIm1hbmFnZS1hY2NvdW50LWxpbmtzIiwidmlldy1wcm9maWxlIl19fSwic2NvcGUiOiJvcGVuaWQgcHJvZmlsZSBlbWFpbCIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJuYW1lIjoiQm9iIERlbW8iLCJwcmVmZXJyZWRfdXNlcm5hbWUiOiJib2IiLCJnaXZlbl9uYW1lIjoiQm9iIiwiZmFtaWx5X25hbWUiOiJEZW1vIiwiZW1haWwiOiJib2JAZXhhbXBsZS5vcmcifQ.PvQ4BzFSY8kDT48wAk1hrY-hwIkWVW53B5VvwYOiqBhOKh73iLbSioPqlClRKzdjHBQ_ELAvpc-TfjaOxs_QnMLShPPrFsAAJcAGFomuziI3ugHWanqIPJiXjtkoCp-rdrCliGqAmb9QwfHJM3zyDOGWmhVSx2ZM9vXvMR4kxa7V0qzlHaUsfCGN0p6Llpey_IzuTzoXsFOifg7oDBMHrAKwbjgI_PDE3GTGEgppc3pelTol_ib1edj91F_DQ15uzQOrSWUX0QMG_CANAQ55MJiTUjWgNtLsq99GTWu9ozPk_gk8OEryeUCxK8tjvz5uqHVNV5BX1FLIWnZR2kTGYA"
+
+     // val resultsWithoutApi = benchmarkWithoutAPI(tripleCount)
+
+    // val resultsWithApi = benchmarkWithAPI(tripleCount, authCode)
+
+    // val resultsSum = benchmarkSum(tripleCount, authCode)
+
+    val timeX3dhAvg = benchmarkX3DH(tripleCount, 10)
+
+//    val mapper = jacksonObjectMapper()
+//    mapper.writerWithDefaultPrettyPrinter()
+//        .writeValue(File("benchmark_results.json"), resultsX3DH)
+
+    println("List of times: $timeX3dhAvg")
+    println("Average x3dh time: ${timeX3dhAvg.average()}")
+}

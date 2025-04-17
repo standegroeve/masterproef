@@ -325,6 +325,7 @@ object X3DH {
 
             client.newCall(requestDelete).execute().use { response ->
                 if (response.code != 201) {
+                    println("Unexpected response code: ${response.code}, Message: ${response.message}")
                     throw RuntimeException("Unexpected response code: ${response.code}, Message: ${response.message}")
                 }
             }

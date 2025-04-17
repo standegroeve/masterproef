@@ -152,6 +152,23 @@ class PodManagementApi(
                 pod?.getNewMessages()
             }
     }
+
+    @DELETE
+    @Path("{podId}/messages")
+    fun deleteMessages(@PathParam("podId") podId: String): Uni<Response> {
+        val podId = uriInfo.absolutePath.toString().substringBeforeLast("/messages")
+        return podStore.getById(podId).chain { existingPod ->
+            if (existingPod == null) {
+                Uni.createFrom().item(Response.status(Response.Status.NOT_FOUND).build())
+            }
+            else {
+                val clearedStorage = mutableMapOf<String, Any>()
+                val updatedPod = existingPod.copy(messageStorage = clearedStorage)
+                podStore.persist(updatedPod)
+                    .map { Response.noContent().build() }
+            }
+        }
+    }
 }
 
 data class RegisterPodInput(

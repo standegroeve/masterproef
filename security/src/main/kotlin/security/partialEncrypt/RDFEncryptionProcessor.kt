@@ -44,10 +44,12 @@ object RDFEncryptionProcessor {
         return Base64.getEncoder().encodeToString(hashBytes) // Encode as Base64 for readability
     }
 
-    val model = ModelFactory.createDefaultModel()
+
 
 
     fun encryptRDF(jsonString: String, timestampBytes: ByteArray, secretKey: ByteArray, associatedData: ByteArray, valuesToEncrypt: List<String>, tripleGroupsToEncrypt: List<List<Statement>>): String {
+        val model = ModelFactory.createDefaultModel()
+
         model.read(StringReader(jsonString), "http://example.org/", "JSON-LD")
 
         var currentChar = 'A'
@@ -328,6 +330,8 @@ object RDFEncryptionProcessor {
 
 
     fun decryptRDF(jsonString: String, secretKey: ByteArray, associatedData: ByteArray): Pair<String, Long> {
+        val model = ModelFactory.createDefaultModel()
+
         var timestampBytes: Long? = null
 
         model.read(StringReader(jsonString), null, "JSON-LD")

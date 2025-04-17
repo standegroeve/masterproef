@@ -1,19 +1,14 @@
-package security
+package security.benchmarks
 
 import com.fasterxml.jackson.annotation.JsonProperty
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import org.apache.jena.query.QueryExecutionFactory
 import org.apache.jena.rdf.model.ModelFactory
 import org.apache.jena.rdf.model.Statement
 import org.apache.jena.riot.RDFDataMgr
 import org.apache.jena.riot.RDFFormat
-import security.crypto.generatePrekeys
-import security.crypto.generateX25519KeyPair
-import java.io.File
+import security.partialEncrypt.RDFEncryptionProcessor
 import java.io.StringReader
 import java.io.StringWriter
-import java.nio.ByteBuffer
-import java.util.*
-import kotlin.system.measureNanoTime
 
 data class BenchmarkResult(
     @JsonProperty("encryptionType") val label: String,
@@ -45,7 +40,53 @@ fun generateJsonLd(tripleCount: Int): String {
     return out.toString()
 }
 
-private fun getValuesToEncrypt(): List<String> {
+fun generateJsonLdSum(tripleCount: Int): String {
+    val model = ModelFactory.createDefaultModel()
+
+    model.setNsPrefix("ex", "http://example.org/")
+    model.setNsPrefix("renc", "http://www.w3.org/ns/renc#")
+
+    for (i in 0 until tripleCount) {
+        val subject = model.createResource("ex:$i")
+        model.add(subject, model.createProperty("ex:name"), "Name$i")
+        model.add(subject, model.createProperty("ex:number"), model.createTypedLiteral(1))
+
+        val relatedNumber = i + tripleCount
+        val relatedSubject = model.createResource("ex:$relatedNumber")
+
+        model.add(subject, model.createProperty("ex:relatedTo"), relatedSubject)
+        model.add(relatedSubject, model.createProperty("ex:name"), "Name$relatedNumber")
+
+    }
+
+    val out = StringWriter()
+    RDFDataMgr.write(out, model, RDFFormat.JSONLD_PRETTY)
+    return out.toString()
+}
+
+fun getSumOfJsonLd(jsonString: String): Int {
+    val model = ModelFactory.createDefaultModel()
+
+    model.read(StringReader(jsonString), null, "JSON-LD")
+
+    val sumQuery = """
+            PREFIX ex: <http://example.org/>
+            SELECT (SUM(?num) AS ?total)
+            WHERE {
+                ?s ex:number ?num .
+            }
+        """.trimIndent()
+
+    val queryExec = QueryExecutionFactory.create(sumQuery, model)
+    val results = queryExec.execSelect()
+
+    if (results.hasNext()) {
+        return results.next().getLiteral("total").int
+    }
+    throw RuntimeException("No numbers found in the JsonLd")
+}
+
+fun getValuesToEncrypt(): List<String> {
     val valuesToEncryptModel = ModelFactory.createDefaultModel()
     val valuesToEncryptJsonString = """
             {
@@ -73,7 +114,7 @@ private fun getValuesToEncrypt(): List<String> {
     return  valuesToEncryptList
 }
 
-private fun getTriplesToEncrypt(tripleCount: Int): List<List<Statement>> {
+fun getTriplesToEncrypt(tripleCount: Int): List<List<Statement>> {
     val groupsToEncryptModel = ModelFactory.createDefaultModel()
 
     val graphString = StringBuilder()
@@ -115,63 +156,10 @@ private fun getTriplesToEncrypt(tripleCount: Int): List<List<Statement>> {
     return tripleGroupsToEncrypt
 }
 
-fun main() {
-    val results = mutableListOf<BenchmarkResult>()
-    val alice = User("Alice")
-    val bob = User("Bob")
-    val authCode = ""
-    val timestampBytes = ByteBuffer.allocate(8).putLong(System.currentTimeMillis()).array()
-
-    /*
-        Initialize both Alice and Bob
-     */
-    alice.preKeys = generatePrekeys()
-    bob.preKeys = generatePrekeys()
-
-    val (initialSharedKey, _) = generateX25519KeyPair()
-    alice.sharedKey = initialSharedKey.encoded
-    bob.sharedKey = initialSharedKey.encoded
-
-    alice.DHKeyPair = generateX25519KeyPair()
-    bob.DHKeyPair = generateX25519KeyPair()
-
-    alice.initialDHPublicKey = bob.DHKeyPair!!.first.encoded
-    alice.targetPublicKey = bob.preKeys!!.getPublic().publicIdentityPreKeyX25519.encoded
-
-
-
-    bob.targetPublicKey = alice.preKeys!!.getPublic().publicIdentityPreKeyX25519.encoded
-
-    println("1: ${Base64.getEncoder().encodeToString(alice.sharedKey)}")
-    println("1: ${Base64.getEncoder().encodeToString(bob.sharedKey)}")
-
-    alice.sendInitialMessage("bob", "initialMessage".toByteArray(), timestampBytes, authCode, false)
-    bob.receiveMessage("bob", authCode, false)
-
-    val valuesToEncrypt = getValuesToEncrypt()
-
-    for (i in 1..500) {
-        val json = generateJsonLd(i * 5)
-        val jsonByteArray = json.toByteArray()
-        val size = json.toByteArray(Charsets.UTF_8).size
-
-        val tripleGroupsToEncrypt = getTriplesToEncrypt(i * 5)
-
-        val timeAtomicEncrypt = measureNanoTime {
-            alice.sendMessage("bob", jsonByteArray, timestampBytes, authCode, false)
-            bob.receiveMessage("bob", authCode, false)
-        }
-        results.add(BenchmarkResult("Atomic Encryption", size, timeAtomicEncrypt))
-
-        val timePartialEncrypt = measureNanoTime {
-            alice.sendMessage("bob", jsonByteArray, timestampBytes, authCode, true, valuesToEncrypt, tripleGroupsToEncrypt)
-            bob.receiveMessage("bob", authCode, true)
-        }
-        results.add(BenchmarkResult("Partial Encryption", size, timePartialEncrypt))
-
-        val mapper = jacksonObjectMapper()
-        mapper.writerWithDefaultPrettyPrinter()
-            .writeValue(File("benchmark_results.json"), results)
-    }
-
+fun printProgressBar(current: Int, total: Int, barLength: Int = 50) {
+    val percent = (current.toDouble() / total * 100).toInt()
+    val filledLength = (barLength * current) / total
+    val bar = "█".repeat(filledLength) + "-".repeat(barLength - filledLength)
+    print("\rProgress: |$bar| $percent% ($current/$total)")
+    if (current == total) println()
 }

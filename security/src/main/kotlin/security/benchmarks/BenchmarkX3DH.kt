@@ -1,0 +1,89 @@
+package security.benchmarks
+
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
+import security.User
+import security.X3DH
+import security.crypto.generatePrekeys
+import java.nio.ByteBuffer
+import kotlin.system.measureNanoTime
+import kotlin.system.measureTimeMillis
+
+fun benchmarkX3DH(tripleCount: Int, accounts: Int): MutableList<Long> {
+    val alice = User("alice")
+
+    val times = mutableListOf<Long>()
+
+    val authCodes = listOf(
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+    )
+    /*
+        Initialize both Alice and Bob
+     */
+    alice.preKeys = generatePrekeys()
+
+    var totalTime: Long = 0
+
+    for (i in 0..accounts - 1) {
+        val bob = User("bob$i")
+        val authCode = authCodes[i]
+
+        val x3dhTime = measureNanoTime {
+            X3DH.initiateSliceSchema(bob.podId, authCode)
+            X3DH.uploadPreKeys(bob.podId, bob.preKeys!!.getPublic(), authCode)
+
+            val maxRetries = 5
+            var attempt = 0
+            var currentDelay: Long = 200
+
+            while (attempt < maxRetries) {
+                try {
+                    alice.sharedKey = X3DH.sendInitialMessage(alice, bob.podId, alice.preKeys!!, authCode)
+                    break
+                }
+                catch (e: RuntimeException) {
+                    runBlocking {
+                        delay(currentDelay)
+                    }
+                    currentDelay *= 2
+                    attempt++
+                    if (attempt == maxRetries) {
+                        throw Error("Too much tries!!!!!")
+                    }
+                }
+            }
+
+            attempt = 0
+            currentDelay = 200
+
+            while (attempt < maxRetries) {
+                try {
+                    bob.sharedKey = X3DH.processInitialMessage(bob, bob.podId, bob.preKeys!!, authCode)
+                    break
+                }
+                catch (e: RuntimeException) {
+                    runBlocking {
+                        delay(currentDelay)
+                    }
+                    currentDelay *= 2
+                    attempt++
+                    if (attempt == maxRetries) {
+                        throw Error("Too much tries!!!!!")
+                    }
+                }
+            }
+        }
+        times.add(x3dhTime)
+    }
+
+    return times
+}
