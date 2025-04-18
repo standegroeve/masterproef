@@ -471,7 +471,9 @@ object RDFEncryptionProcessor {
 
             val decryptedString = String(decryptedValue!!.copyOfRange(8, decryptedValue.size))
 
-            if (timestampBytes == null) timestampBytes = decryptedValue.copyOfRange(0, 8).toString().toLong()
+            if (timestampBytes == null) timestampBytes = decryptedValue.copyOfRange(0, 8).fold(0L) { acc, byte ->
+                (acc shl 8) or (byte.toLong() and 0xFF)
+            }
 
 
             val parserModel = ModelFactory.createDefaultModel()
