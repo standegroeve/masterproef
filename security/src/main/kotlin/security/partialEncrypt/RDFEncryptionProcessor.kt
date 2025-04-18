@@ -1,8 +1,6 @@
 package security.partialEncrypt
 
 import com.fasterxml.jackson.annotation.JsonProperty
-import com.fasterxml.jackson.databind.ser.Serializers.Base
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.apache.jena.datatypes.xsd.XSDDatatype
 import org.apache.jena.query.*
 import org.apache.jena.rdf.model.*
@@ -38,20 +36,11 @@ data class EC(
 
 object RDFEncryptionProcessor {
 
-    private fun sha256Hash(input: String): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        val hashBytes = digest.digest(input.toByteArray())
-        return Base64.getEncoder().encodeToString(hashBytes) // Encode as Base64 for readability
-    }
-
     val model = ModelFactory.createDefaultModel()
 
 
     fun encryptRDF(jsonString: String, timestampBytes: ByteArray, secretKey: ByteArray, associatedData: ByteArray, valuesToEncrypt: List<String>, tripleGroupsToEncrypt: List<List<Statement>>): String {
         model.read(StringReader(jsonString), "http://example.org/", "JSON-LD")
-
-        var currentChar = 'A'
-        var currentReificationNumber = 1
 
         //////////////////////////////////
         // Handle triple set encryption //
@@ -75,13 +64,13 @@ object RDFEncryptionProcessor {
                 renc_datatype = "rdf:Resource"
             ).toString()
 
-            model.add(model.createResource("_:$currentChar"), model.createProperty("renc:encTriples"), model.createLiteral(ECString))
-            model.add(group.first().subject, model.createProperty("renc:triples"), model.createLiteral("_:$currentChar"))
-            model.add(group.first().subject, model.createProperty("http://www.w3.org/ns/renc#triples"), model.createLiteral("_:$currentChar"))
+            val blankNodeRandomNumber = UUID.randomUUID()
+
+            model.add(model.createResource("_:$blankNodeRandomNumber"), model.createProperty("renc:encTriples"), model.createLiteral(ECString))
+            model.add(group.first().subject, model.createProperty("renc:triples"), model.createLiteral("_:$blankNodeRandomNumber"))
+            model.add(group.first().subject, model.createProperty("http://www.w3.org/ns/renc#triples"), model.createLiteral("_:$blankNodeRandomNumber"))
 
             model.remove(group)
-
-            currentChar++
         }
 
         for (value in valuesToEncrypt) {
@@ -122,37 +111,38 @@ object RDFEncryptionProcessor {
 
                 val encryptedPredicate = aesGcmEncrypt(timestampBytes + value.toByteArray(), secretKey, associatedData)
 
+                val randomReificationNumber = UUID.randomUUID()
+
                 val updateQuery = """
                         PREFIX ex: <http://example.org/>
                         PREFIX renc: <http://www.w3.org/ns/renc#>
                         DELETE { ?s <$value> $objectValue }
-                        INSERT { ?s renc:encPredicate ex:reificationQuad$currentReificationNumber }
+                        INSERT { ?s renc:encPredicate ex:reificationQuad-$randomReificationNumber }
 
                         WHERE {
                             ?s <$value> $objectValue .
                         }
                     """.trimIndent()
 
+                val blankNodeRandomNumber = UUID.randomUUID()
 
-                model.add(model.createResource("_:$currentChar"), model.createProperty("renc:encNLabel"), model.createLiteral(EC(
+                model.add(model.createResource("_:$blankNodeRandomNumber"), model.createProperty("renc:encNLabel"), model.createLiteral(EC(
                     `@value` = Base64.getEncoder().encodeToString(encryptedObject),
                     renc_datatype = result.getLiteral("o").datatype.uri,
                 ).toString()))
 
                 val statement = model.createStatement(
-                    model.createResource("http://example.org/reificationQuad$currentReificationNumber"),
+                    model.createResource("http://example.org/reificationQuad-$randomReificationNumber"),
                     model.createProperty("renc:encPredicate"),
-                    model.createLiteral("_:$currentChar")
+                    model.createLiteral("_:$blankNodeRandomNumber")
                 )
 
-                val reifiedStatement = statement.createReifiedStatement("http://example.org/reificationQuad$currentReificationNumber")
+                val reifiedStatement = statement.createReifiedStatement("http://example.org/reificationQuad-$randomReificationNumber")
                 reifiedStatement.addProperty(model.createProperty("renc:encPLabel"), EC(
                     `@value` = Base64.getEncoder().encodeToString(encryptedPredicate),
                     renc_datatype = XSDDatatype.XSDstring.uri,
                 ).toString())
 
-                currentChar++
-                currentReificationNumber++
 
                 UpdateAction.parseExecute(updateQuery, model)
             }
@@ -185,17 +175,19 @@ object RDFEncryptionProcessor {
                 val subjectValue = result.getResource("s")
                 val predicateValue = result.getResource("p")
 
+                val blankNodeRandomNumber = UUID.randomUUID()
+
                 val updateQuery = """
                         PREFIX ex: <http://example.org/>
                         PREFIX renc: <http://www.w3.org/ns/renc#>
                         DELETE { <$subjectValue> <$predicateValue> "$value" }
-                        INSERT { <$subjectValue> <$predicateValue> "_:$currentChar" }
+                        INSERT { <$subjectValue> <$predicateValue> "_:$blankNodeRandomNumber" }
                         WHERE {
                             <$subjectValue> <$predicateValue> "$value" .
                         }
                     """.trimIndent()
 
-                model.add(model.createResource("_:$currentChar"), model.createProperty("renc:encNLabel"), model.createLiteral(EC(
+                model.add(model.createResource("_:$blankNodeRandomNumber"), model.createProperty("renc:encNLabel"), model.createLiteral(EC(
                     `@value` = Base64.getEncoder().encodeToString(encryptedObject),
                     renc_datatype = XSDDatatype.XSDstring.uri
                 ).toString()))
@@ -203,8 +195,6 @@ object RDFEncryptionProcessor {
 
                 UpdateAction.parseExecute(updateQuery, model)
             }
-
-            if (resultsListObj.isNotEmpty()) currentChar++
 
             queryExecObj.close()
 
@@ -237,8 +227,10 @@ object RDFEncryptionProcessor {
                 // Remove triples with old subject value
                 model.remove(resultsListSubj)
 
+                val blankNodeRandomNumber = UUID.randomUUID()
+
                 model.add(
-                    model.createResource("_:$currentChar"), model.createProperty("renc:encNLabel"), model.createLiteral(
+                    model.createResource("_:$blankNodeRandomNumber"), model.createProperty("renc:encNLabel"), model.createLiteral(
                         EC(
                             `@value` = Base64.getEncoder().encodeToString(encryptedSubject),
                             renc_datatype = "rdf:Resource"
@@ -271,7 +263,7 @@ object RDFEncryptionProcessor {
                             PREFIX ex: <http://example.org/>
                             PREFIX renc: <http://www.w3.org/ns/renc#>
                             DELETE { <$subjectValue> <$predicateValue> <$value> }
-                            INSERT { <$subjectValue> <$predicateValue> "_:$currentChar" }
+                            INSERT { <$subjectValue> <$predicateValue> "_:$blankNodeRandomNumber" }
                             WHERE {
                                 <$subjectValue> <$predicateValue> <$value> .
                             }
@@ -279,8 +271,6 @@ object RDFEncryptionProcessor {
 
                     UpdateAction.parseExecute(updateQuery, model)
                 }
-
-                if (resultsListSubjAsObj.isNotEmpty()) currentChar++
 
                 queryExecSubjAsObj.close()
             }
