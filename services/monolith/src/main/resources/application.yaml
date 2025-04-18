@@ -51,6 +51,106 @@ quarkus:
               "ex": "http://example.org/"
             }
           auto-ingest-rdf: false
+        - name: bob1
+          default-context: |
+            {
+              "kss": "https://kvasir.discover.ilabt.imec.be/vocab#",
+              "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+              "xsd": "http://www.w3.org/2001/XMLSchema#",
+              "schema": "http://schema.org/",
+              "ex": "http://example.org/"
+            }
+          auto-ingest-rdf: false
+        - name: bob2
+          default-context: |
+            {
+              "kss": "https://kvasir.discover.ilabt.imec.be/vocab#",
+              "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+              "xsd": "http://www.w3.org/2001/XMLSchema#",
+              "schema": "http://schema.org/",
+              "ex": "http://example.org/"
+            }
+          auto-ingest-rdf: false
+        - name: bob3
+          default-context: |
+            {
+              "kss": "https://kvasir.discover.ilabt.imec.be/vocab#",
+              "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+              "xsd": "http://www.w3.org/2001/XMLSchema#",
+              "schema": "http://schema.org/",
+              "ex": "http://example.org/"
+            }
+          auto-ingest-rdf: false
+        - name: bob4
+          default-context: |
+            {
+              "kss": "https://kvasir.discover.ilabt.imec.be/vocab#",
+              "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+              "xsd": "http://www.w3.org/2001/XMLSchema#",
+              "schema": "http://schema.org/",
+              "ex": "http://example.org/"
+            }
+          auto-ingest-rdf: false
+        - name: bob5
+          default-context: |
+            {
+              "kss": "https://kvasir.discover.ilabt.imec.be/vocab#",
+              "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+              "xsd": "http://www.w3.org/2001/XMLSchema#",
+              "schema": "http://schema.org/",
+              "ex": "http://example.org/"
+            }
+          auto-ingest-rdf: false
+        - name: bob6
+          default-context: |
+            {
+              "kss": "https://kvasir.discover.ilabt.imec.be/vocab#",
+              "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+              "xsd": "http://www.w3.org/2001/XMLSchema#",
+              "schema": "http://schema.org/",
+              "ex": "http://example.org/"
+            }
+          auto-ingest-rdf: false
+        - name: bob7
+          default-context: |
+            {
+              "kss": "https://kvasir.discover.ilabt.imec.be/vocab#",
+              "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+              "xsd": "http://www.w3.org/2001/XMLSchema#",
+              "schema": "http://schema.org/",
+              "ex": "http://example.org/"
+            }
+          auto-ingest-rdf: false
+        - name: bob8
+          default-context: |
+            {
+              "kss": "https://kvasir.discover.ilabt.imec.be/vocab#",
+              "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+              "xsd": "http://www.w3.org/2001/XMLSchema#",
+              "schema": "http://schema.org/",
+              "ex": "http://example.org/"
+            }
+          auto-ingest-rdf: false
+        - name: bob9
+          default-context: |
+            {
+              "kss": "https://kvasir.discover.ilabt.imec.be/vocab#",
+              "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+              "xsd": "http://www.w3.org/2001/XMLSchema#",
+              "schema": "http://schema.org/",
+              "ex": "http://example.org/"
+            }
+          auto-ingest-rdf: false
+        - name: bob10
+          default-context: |
+            {
+              "kss": "https://kvasir.discover.ilabt.imec.be/vocab#",
+              "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+              "xsd": "http://www.w3.org/2001/XMLSchema#",
+              "schema": "http://schema.org/",
+              "ex": "http://example.org/"
+            }
+          auto-ingest-rdf: false
         - name: swdemo
           default-context: |
             {

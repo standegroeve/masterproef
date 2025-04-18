@@ -31,11 +31,11 @@ fun benchmarkX3DH(tripleCount: Int, accounts: Int): MutableList<Long> {
      */
     alice.preKeys = generatePrekeys()
 
-    var totalTime: Long = 0
-
-    for (i in 0..accounts - 1) {
+    for (i in 1..accounts) {
         val bob = User("bob$i")
-        val authCode = authCodes[i]
+        val authCode = authCodes[i-1]
+
+        bob.preKeys = generatePrekeys()
 
         val x3dhTime = measureNanoTime {
             X3DH.initiateSliceSchema(bob.podId, authCode)

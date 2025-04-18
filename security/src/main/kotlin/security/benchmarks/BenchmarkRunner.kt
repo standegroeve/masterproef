@@ -16,10 +16,13 @@ fun main() {
 
     val timeX3dhAvg = benchmarkX3DH(tripleCount, 10)
 
-//    val mapper = jacksonObjectMapper()
-//    mapper.writerWithDefaultPrettyPrinter()
-//        .writeValue(File("benchmark_results.json"), resultsX3DH)
+    val resultsX3DH = mapOf(
+        "times" to timeX3dhAvg,
+        "averageTime" to timeX3dhAvg.average()
+    )
 
-    println("List of times: $timeX3dhAvg")
-    println("Average x3dh time: ${timeX3dhAvg.average()}")
+    val mapper = jacksonObjectMapper()
+    mapper.writerWithDefaultPrettyPrinter()
+        .writeValue(File("benchmark_results.json"), resultsX3DH)
+
 }
