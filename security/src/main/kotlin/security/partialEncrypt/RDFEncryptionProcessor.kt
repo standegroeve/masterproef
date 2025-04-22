@@ -120,7 +120,7 @@ object RDFEncryptionProcessor {
                         PREFIX ex: <http://example.org/>
                         PREFIX renc: <http://www.w3.org/ns/renc#>
                         DELETE { ?s <$value> $objectValue }
-                        INSERT { ?s renc:encPredicate ex:reificationQuad$randomReificationNumber }
+                        INSERT { ?s renc:encPredicate ex:reificationQuad-$randomReificationNumber }
 
                         WHERE {
                             ?s <$value> $objectValue .
@@ -134,12 +134,12 @@ object RDFEncryptionProcessor {
                 ).toString()))
 
                 val statement = model.createStatement(
-                    model.createResource("http://example.org/reificationQuad$randomReificationNumber"),
+                    model.createResource("http://example.org/reificationQuad-$randomReificationNumber"),
                     model.createProperty("renc:encPredicate"),
                     model.createLiteral("_:$blankNodeRandomNumber")
                 )
 
-                val reifiedStatement = statement.createReifiedStatement("http://example.org/reificationQuad$randomReificationNumber")
+                val reifiedStatement = statement.createReifiedStatement("http://example.org/reificationQuad-$randomReificationNumber")
                 reifiedStatement.addProperty(model.createProperty("renc:encPLabel"), EC(
                     `@value` = Base64.getEncoder().encodeToString(encryptedPredicate),
                     renc_datatype = XSDDatatype.XSDstring.uri,
