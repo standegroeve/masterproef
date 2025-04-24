@@ -1,8 +1,8 @@
 package security.benchmarks
 
 import security.User
-import security.crypto.generatePrekeys
-import security.crypto.generateX25519KeyPair
+import security.crypto.KeyUtils.generatePrekeys
+import security.crypto.KeyUtils.generateX25519KeyPair
 import security.messageController
 import java.nio.ByteBuffer
 import java.util.*
@@ -36,9 +36,6 @@ fun benchmarkWithoutAPI(tripleCount: Int): List<BenchmarkResult> {
 
 
     bob.targetPublicKey = alice.preKeys!!.getPublic().publicIdentityPreKeyX25519.encoded
-
-    println("1: ${Base64.getEncoder().encodeToString(alice.sharedKey)}")
-    println("1: ${Base64.getEncoder().encodeToString(bob.sharedKey)}")
 
     alice.sendInitialMessage("bob", "initialMessage".toByteArray(), timestampBytes, authCode, false, emptyList(), emptyList(), mocked)
     bob.receiveMessage("bob", authCode, false, mocked)

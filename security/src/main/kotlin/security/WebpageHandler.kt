@@ -7,7 +7,7 @@ import io.vertx.ext.web.Router
 import io.vertx.ext.web.RoutingContext
 import org.apache.jena.rdf.model.ModelFactory
 import org.apache.jena.rdf.model.Statement
-import security.crypto.generatePrekeys
+import security.crypto.KeyUtils.generatePrekeys
 import java.io.StringReader
 import java.nio.ByteBuffer
 

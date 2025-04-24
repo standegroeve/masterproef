@@ -3,10 +3,10 @@ package security
 import org.apache.jena.rdf.model.Statement
 import org.bouncycastle.crypto.params.X25519PrivateKeyParameters
 import org.bouncycastle.crypto.params.X25519PublicKeyParameters
-import security.crypto.DiffieHellman
-import security.crypto.aesGcmDecrypt
-import security.crypto.aesGcmEncrypt
-import security.crypto.generateX25519KeyPair
+import security.crypto.CryptoUtils.DiffieHellman
+import security.crypto.CryptoUtils.aesGcmDecrypt
+import security.crypto.CryptoUtils.aesGcmEncrypt
+import security.crypto.KeyUtils.generateX25519KeyPair
 import security.messages.DecryptedMessage
 import security.messages.EncryptedMessage
 import security.messages.X3DHPreKeys
@@ -55,7 +55,7 @@ class User(val podId: String) {
         val associatedData = DHKeyPair!!.first.encoded + preKeys!!.publicIdentityPreKey.encoded + targetPublicKey!!
 
         // encrypt message
-        var ciphertext: Any? = null
+        var ciphertext: Any?
         if (keepStructure) {
             ciphertext = RDFEncryptionProcessor.encryptRDF(String(input, Charsets.UTF_8), timestampBytes, messageKey, associatedData, valuesToEncrypt, tripleGroupsToEncrypt).toByteArray()
         }
@@ -103,7 +103,7 @@ class User(val podId: String) {
                     decryptedString = String(decryptedData!!.copyOfRange(8, decryptedData.size))
                     timestampBytes = ByteBuffer.wrap(decryptedData.copyOfRange(0, 8)).long
                 }
-                messagesList.add(DecryptedMessage(message.messageId, message.publicKey, decryptedString!!, timestampBytes!!))
+                messagesList.add(DecryptedMessage(message.messageId, message.publicKey, decryptedString, timestampBytes))
                 continue
             }
 
@@ -144,20 +144,21 @@ class User(val podId: String) {
             val associatedData = message.publicKey + targetPublicKey!! + preKeys!!.publicIdentityPreKey.encoded
 
             // decrypt message
-            var decryptedString: String? = null
-            var timestampBytes: Long? = null
+            var decryptedString: String?
+            var timestampBytes: Long?
 
             if (keepStructure) {
-                val result = RDFEncryptionProcessor.decryptRDF(String(message.cipherText, Charsets.UTF_8), messageKey!!, associatedData)
+                val result = RDFEncryptionProcessor.decryptRDF(String(message.cipherText, Charsets.UTF_8),
+                    messageKey, associatedData)
                 decryptedString = result.first
                 timestampBytes = result.second
             }
             else {
-                val decryptedData = aesGcmDecrypt(message.cipherText, messageKey!!, associatedData)
+                val decryptedData = aesGcmDecrypt(message.cipherText, messageKey, associatedData)
                 decryptedString = String(decryptedData!!.copyOfRange(8, decryptedData.size))
                 timestampBytes = ByteBuffer.wrap(decryptedData.copyOfRange(0, 8)).long
             }
-            messagesList.add(DecryptedMessage(message.messageId, message.publicKey, decryptedString!!, timestampBytes!!))
+            messagesList.add(DecryptedMessage(message.messageId, message.publicKey, decryptedString, timestampBytes))
         }
 
         return messagesList

@@ -4,7 +4,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import security.User
 import security.X3DH
-import security.crypto.generatePrekeys
+import security.crypto.KeyUtils.generatePrekeys
 import security.messageController
 import java.nio.ByteBuffer
 import kotlin.system.measureNanoTime

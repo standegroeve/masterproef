@@ -1,21 +1,21 @@
 package security
 
-import com.fasterxml.jackson.core.type.TypeReference
-import com.fasterxml.jackson.databind.util.JSONPObject
 import com.fasterxml.jackson.module.kotlin.convertValue
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import org.bouncycastle.crypto.params.X25519PrivateKeyParameters
-import java.util.*
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import com.fasterxml.jackson.module.kotlin.readValue
-import org.apache.kafka.common.protocol.types.Field.Bool
 import org.bouncycastle.crypto.params.X25519PublicKeyParameters
 import security.crypto.*
+import security.crypto.CryptoUtils.HKDF
+import security.crypto.CryptoUtils.DiffieHellman
+import security.crypto.CryptoUtils.aesGcmDecrypt
+import security.crypto.CryptoUtils.aesGcmEncrypt
+import security.crypto.KeyUtils.generateX25519KeyPair
 import security.messages.*
-import java.util.concurrent.TimeUnit
+import java.util.*
 
 
 object X3DH {
@@ -176,10 +176,10 @@ object X3DH {
 
         actor.initialDHPublicKey = targetPrekeys.publicSignedPreKey.encoded
         actor.targetPublicKey = targetPrekeys.publicIdentityPreKeyX25519.encoded
-        actor.DHKeyPair = generateX25519KeyPair()
+        actor.DHKeyPair = KeyUtils.generateX25519KeyPair()
 
         // Verify the signature
-        val verified = xeddsa_verify(
+        val verified = XEdDSA.xeddsa_verify(
             targetPrekeys.publicIdentityPreKeyEd25519,
             targetPrekeys.publicSignedPreKey.encoded,
             targetPrekeys.preKeySignature
