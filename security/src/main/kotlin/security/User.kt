@@ -4,10 +4,8 @@ import org.apache.jena.rdf.model.Statement
 import org.apache.kafka.shaded.com.google.protobuf.Timestamp
 import org.bouncycastle.crypto.params.X25519PrivateKeyParameters
 import org.bouncycastle.crypto.params.X25519PublicKeyParameters
-import security.crypto.DiffieHellman
-import security.crypto.aesGcmDecrypt
-import security.crypto.aesGcmEncrypt
-import security.crypto.generateX25519KeyPair
+import security.crypto.CryptoUtils.DiffieHellman
+import security.crypto.KeyUtils.generateX25519KeyPair
 import security.messages.DecryptedMessage
 import security.messages.EncryptedMessage
 import security.messages.X3DHPreKeys
