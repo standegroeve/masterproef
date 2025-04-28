@@ -16,6 +16,14 @@ data class BenchmarkResult(
     @JsonProperty("durationNs") val time: Long
 )
 
+data class StorageBenchmarkResult(
+    @JsonProperty("encryptionType") val encryptionType: String,
+    @JsonProperty("originalSize") val originalSize: Int,
+    @JsonProperty("encryptedSize") val encryptedSize: Int,
+    @JsonProperty("overheadPercentage") val overheadPercent: Double
+
+)
+
 fun generateJsonLd(tripleCount: Int): String {
     val model = ModelFactory.createDefaultModel()
 
@@ -26,6 +34,7 @@ fun generateJsonLd(tripleCount: Int): String {
         val subject = model.createResource("ex:$i")
         model.add(subject, model.createProperty("ex:name"), "Name$i")
         model.add(subject, model.createProperty("ex:description"), "Description$i")
+        model.add(subject, model.createProperty("ex:address"), "Address$i")
 
         val relatedNumber = i + tripleCount
         val relatedSubject = model.createResource("ex:$relatedNumber")
@@ -49,6 +58,7 @@ fun generateJsonLdSum(tripleCount: Int): String {
     for (i in 0 until tripleCount) {
         val subject = model.createResource("ex:$i")
         model.add(subject, model.createProperty("ex:name"), "Name$i")
+        model.add(subject, model.createProperty("ex:description"), "Description$i")
         model.add(subject, model.createProperty("ex:number"), model.createTypedLiteral(1))
 
         val relatedNumber = i + tripleCount
@@ -86,9 +96,26 @@ fun getSumOfJsonLd(jsonString: String): Int {
     throw RuntimeException("No numbers found in the JsonLd")
 }
 
-fun getValuesToEncrypt(): List<String> {
+fun getValuesToEncrypt(percentage: Int): List<String> {
     val valuesToEncryptModel = ModelFactory.createDefaultModel()
-    val valuesToEncryptJsonString = """
+
+    val valuesToEncryptJsonString: String = when(percentage) {
+        25 -> {
+           """
+            {
+                "@context": {
+                    "ex": "http://example.org/",
+                    "renc": "http://www.w3.org/ns/renc#"
+                },
+                "@id": "ex:encryptionValues",
+                "ex:valuesToEncrypt": [
+                    { "@id": "ex:name" }
+                ]
+            }
+            """.trimIndent()
+        }
+        50 -> {
+            """
             {
                 "@context": {
                     "ex": "http://example.org/",
@@ -101,6 +128,27 @@ fun getValuesToEncrypt(): List<String> {
                 ]
             }
             """.trimIndent()
+        }
+        75 -> {
+            """
+            {
+                "@context": {
+                    "ex": "http://example.org/",
+                    "renc": "http://www.w3.org/ns/renc#"
+                },
+                "@id": "ex:encryptionValues",
+                "ex:valuesToEncrypt": [
+                    { "@id": "ex:name" },
+                    { "@id": "ex:description" },
+                    { "@id": "ex:address" }
+                ]
+            }
+            """.trimIndent()
+        }
+        else -> {
+            throw IllegalArgumentException("Unsupported encryption percentage")
+        }
+    }
 
     valuesToEncryptModel.read(StringReader(valuesToEncryptJsonString), null, "JSON-LD")
 
@@ -129,7 +177,7 @@ fun getTriplesToEncrypt(tripleCount: Int): List<List<Statement>> {
         graphString.append("""
             {
                 "@id": "ex:$number",
-                "ex:name": "Name$number"
+                "ex:namenameObj": "Name$number"
             }
         """.trimIndent())
     }

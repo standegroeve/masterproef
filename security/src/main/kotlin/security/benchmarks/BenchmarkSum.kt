@@ -2,6 +2,7 @@ package security.benchmarks
 
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import org.apache.jena.rdf.model.Statement
 import security.User
 import security.X3DH
 import security.crypto.KeyUtils.generatePrekeys
@@ -70,28 +71,51 @@ fun benchmarkSum(tripleCount: Int, authCode: String): List<BenchmarkResult> {
     alice.sendInitialMessage("bob", "initialMessage".toByteArray(), timestampBytes, authCode, false, emptyList(), emptyList(), mocked)
     bob.receiveMessage("bob", authCode, false, mocked)
 
-    val valuesToEncrypt = getValuesToEncrypt()
+    val valuesToEncrypt25 = getValuesToEncrypt(25)
+    val valuesToEncrypt50 = getValuesToEncrypt(50)
+
 
     for (i in 1..tripleCount) {
         val json = generateJsonLdSum(i * 5)
         val jsonByteArray = json.toByteArray()
         val size = json.toByteArray(Charsets.UTF_8).size
 
-        val tripleGroupsToEncrypt = getTriplesToEncrypt(i * 5)
+        val tripleGroupsToEncrypt0 = emptyList<List<Statement>>()
+        val tripleGroupsToEncrypt100 = getTriplesToEncrypt(i * 5)
 
         val timeAtomicEncrypt = measureNanoTime {
             alice.sendMessage("bob", jsonByteArray, timestampBytes, authCode, false, emptyList(), emptyList(), mocked)
-            bob.receiveMessage("bob", authCode, false, mocked).first()
+            val message = bob.receiveMessage("bob", authCode, false, mocked).first()
+            val sum = getSumOfJsonLd(message.plainText)
         }
         results.add(BenchmarkResult("Atomic Encryption", size, timeAtomicEncrypt))
 
         messageController.deleteMessages("bob", authCode, mocked)
 
-        val timePartialEncrypt = measureNanoTime {
-            alice.sendMessage("bob", jsonByteArray, timestampBytes, authCode, true, valuesToEncrypt, tripleGroupsToEncrypt, mocked)
-            messageController.retrieveMessages("bob", "bob", 0, emptyMap(), authCode, mocked).first()
+        val timePartialEncrypt25 = measureNanoTime {
+            alice.sendMessage("bob", jsonByteArray, timestampBytes, authCode, true, valuesToEncrypt25, tripleGroupsToEncrypt0, mocked)
+            val message = messageController.retrieveMessages("bob", "bob", 0, emptyMap(), authCode, mocked).first()
+            val sum = getSumOfJsonLd(String(message.cipherText, Charsets.UTF_8))
         }
-        results.add(BenchmarkResult("Partial Encryption", size, timePartialEncrypt))
+        results.add(BenchmarkResult("Partial Encryption 25%", size, timePartialEncrypt25))
+
+        messageController.deleteMessages("bob", authCode, mocked)
+
+        val timePartialEncrypt50 = measureNanoTime {
+            alice.sendMessage("bob", jsonByteArray, timestampBytes, authCode, true, valuesToEncrypt50, tripleGroupsToEncrypt0, mocked)
+            val message = messageController.retrieveMessages("bob", "bob", 0, emptyMap(), authCode, mocked).first()
+            val sum = getSumOfJsonLd(String(message.cipherText, Charsets.UTF_8))
+        }
+        results.add(BenchmarkResult("Partial Encryption 50%", size, timePartialEncrypt50))
+
+        messageController.deleteMessages("bob", authCode, mocked)
+
+        val timePartialEncrypt75 = measureNanoTime {
+            alice.sendMessage("bob", jsonByteArray, timestampBytes, authCode, true, valuesToEncrypt50, tripleGroupsToEncrypt100, mocked)
+            val message = messageController.retrieveMessages("bob", "bob", 0, emptyMap(), authCode, mocked).first()
+            val sum = getSumOfJsonLd(String(message.cipherText, Charsets.UTF_8))
+        }
+        results.add(BenchmarkResult("Partial Encryption 75%", size, timePartialEncrypt75))
 
         messageController.deleteMessages("bob", authCode, mocked)
 

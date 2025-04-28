@@ -1,11 +1,11 @@
 package security.benchmarks
 
+import org.apache.jena.rdf.model.Statement
 import security.User
 import security.crypto.KeyUtils.generatePrekeys
 import security.crypto.KeyUtils.generateX25519KeyPair
 import security.messageController
 import java.nio.ByteBuffer
-import java.util.*
 import kotlin.system.measureNanoTime
 
 fun benchmarkWithoutAPI(tripleCount: Int): List<BenchmarkResult> {
@@ -40,28 +40,76 @@ fun benchmarkWithoutAPI(tripleCount: Int): List<BenchmarkResult> {
     alice.sendInitialMessage("bob", "initialMessage".toByteArray(), timestampBytes, authCode, false, emptyList(), emptyList(), mocked)
     bob.receiveMessage("bob", authCode, false, mocked)
 
-    val valuesToEncrypt = getValuesToEncrypt()
+    val valuesToEncrypt25 = getValuesToEncrypt(25)
+    val valuesToEncrypt50 = getValuesToEncrypt(50)
+    val valuesToEncrypt75 = getValuesToEncrypt(75)
 
     for (i in 1..tripleCount) {
         val json = generateJsonLd(i * 5)
         val jsonByteArray = json.toByteArray()
         val size = json.toByteArray(Charsets.UTF_8).size
 
-        val tripleGroupsToEncrypt = getTriplesToEncrypt(i * 5)
+        val tripleGroupsToEncrypt0 = emptyList<List<Statement>>()
+        val tripleGroupsToEncrypt100 = getTriplesToEncrypt(i * 5)
 
         val timeAtomicEncrypt = measureNanoTime {
             alice.sendMessage("bob", jsonByteArray, timestampBytes, authCode, false, emptyList(), emptyList(), mocked)
+        }
+
+        val timeAtomicDecrypt = measureNanoTime {
             bob.receiveMessage("bob", authCode, false, mocked)
+
         }
         results.add(BenchmarkResult("Atomic Encryption", size, timeAtomicEncrypt))
+        results.add(BenchmarkResult("Atomic Decryption", size, timeAtomicDecrypt))
 
         messageController.deleteMessages("bob", authCode, mocked)
 
-        val timePartialEncrypt = measureNanoTime {
-            alice.sendMessage("bob", jsonByteArray, timestampBytes, authCode, true, valuesToEncrypt, tripleGroupsToEncrypt, mocked)
+        val timePartialEncrypt25 = measureNanoTime {
+            alice.sendMessage("bob", jsonByteArray, timestampBytes, authCode, true, valuesToEncrypt25, tripleGroupsToEncrypt0, mocked)
+        }
+
+        val timePartialDecrypt25 = measureNanoTime {
             bob.receiveMessage("bob", authCode, true, mocked)
         }
-        results.add(BenchmarkResult("Partial Encryption", size, timePartialEncrypt))
+        results.add(BenchmarkResult("Partial Encryption 25%", size, timePartialEncrypt25))
+        results.add(BenchmarkResult("Partial Decryption 25%", size, timePartialDecrypt25))
+
+        messageController.deleteMessages("bob", authCode, mocked)
+
+        val timePartialEncrypt50 = measureNanoTime {
+            alice.sendMessage("bob", jsonByteArray, timestampBytes, authCode, true, valuesToEncrypt50, tripleGroupsToEncrypt0, mocked)
+        }
+
+        val timePartialDecrypt50 = measureNanoTime {
+            bob.receiveMessage("bob", authCode, true, mocked)
+        }
+        results.add(BenchmarkResult("Partial Encryption 50%", size, timePartialEncrypt50))
+        results.add(BenchmarkResult("Partial Decryption 50%", size, timePartialDecrypt50))
+
+        messageController.deleteMessages("bob", authCode, mocked)
+
+        val timePartialEncrypt75 = measureNanoTime {
+            alice.sendMessage("bob", jsonByteArray, timestampBytes, authCode, true, valuesToEncrypt75, tripleGroupsToEncrypt0, mocked)
+        }
+
+        val timePartialDecrypt75 = measureNanoTime {
+            bob.receiveMessage("bob", authCode, true, mocked)
+        }
+        results.add(BenchmarkResult("Partial Encryption 75%", size, timePartialEncrypt75))
+        results.add(BenchmarkResult("Partial Decryption 75%", size, timePartialDecrypt75))
+
+        messageController.deleteMessages("bob", authCode, mocked)
+
+        val timePartialEncrypt100 = measureNanoTime {
+            alice.sendMessage("bob", jsonByteArray, timestampBytes, authCode, true, valuesToEncrypt75, tripleGroupsToEncrypt100, mocked)
+        }
+
+        val timePartialDecrypt100 = measureNanoTime {
+            bob.receiveMessage("bob", authCode, true, mocked)
+        }
+        results.add(BenchmarkResult("Partial Encryption 100%", size, timePartialEncrypt100))
+        results.add(BenchmarkResult("Partial Decryption 100%", size, timePartialDecrypt100))
 
         messageController.deleteMessages("bob", authCode, mocked)
 

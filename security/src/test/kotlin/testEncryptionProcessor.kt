@@ -2,7 +2,7 @@ import org.apache.jena.rdf.model.ModelFactory
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
-import security.crypto.generateX25519KeyPair
+import security.crypto.KeyUtils.generateX25519KeyPair
 import security.partialEncrypt.RDFEncryptionProcessor
 import java.io.StringReader
 
