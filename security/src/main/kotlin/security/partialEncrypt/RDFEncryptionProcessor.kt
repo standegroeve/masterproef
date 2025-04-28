@@ -98,39 +98,50 @@ object RDFEncryptionProcessor {
             }
 
             for (result in resultsListPred) {
-                val objectValueString = result.getLiteral("o").string
-                val objectDatatypeURI = result.getLiteral("o").datatypeURI
+                val objectNode = result.get("o")
 
-                val objectValue = if (objectDatatypeURI == XSDDatatype.XSDstring.uri) {
-                    "\"$objectValueString\""
-                } else {
+                val (objectValueString, objectDatatypeURI) = when {
+                    objectNode.isLiteral -> {
+                        val literal = objectNode.asLiteral()
+                        val valueStr = literal.string
+                        val datatype = literal.datatypeURI
+                        Pair(valueStr, datatype)
+                    }
+                    objectNode.isResource -> {
+                        val resource = objectNode.asResource()
+                        val valueStr = resource.uri
+                        Pair(valueStr, null)
+                    }
+                    else -> throw IllegalStateException("Unexpected RDF Node type for object")
+                }
+
+                val objectValue = if (objectDatatypeURI != null) {
                     "\"$objectValueString\"^^<$objectDatatypeURI>"
+                } else {
+                    "<$objectValueString>"
                 }
 
                 val encryptedObject = aesGcmEncrypt(timestampBytes + objectValueString.toByteArray(), secretKey, associatedData)
-
                 val encryptedPredicate = aesGcmEncrypt(timestampBytes + value.toByteArray(), secretKey, associatedData)
 
                 val randomReificationNumber = UUID.randomUUID()
-
-                val updateQuery = """
-                        PREFIX ex: <http://example.org/>
-                        PREFIX renc: <http://www.w3.org/ns/renc#>
-                        DELETE { ?s <$value> $objectValue }
-                        INSERT { ?s renc:encPredicate ex:reificationQuad-$randomReificationNumber }
-
-                        WHERE {
-                            ?s <$value> $objectValue .
-                        }
-                    """.trimIndent()
-
                 val blankNode = model.createResource()
                 val randomUUID = UUID.randomUUID().toString()
+
+                val updateQuery = """
+                    PREFIX ex: <http://example.org/>
+                    PREFIX renc: <http://www.w3.org/ns/renc#>
+                    DELETE { ?s <$value> $objectValue }
+                    INSERT { ?s renc:encPredicate ex:reificationQuad-$randomReificationNumber }
+                    WHERE {
+                        ?s <$value> $objectValue .
+                    }
+                """.trimIndent()
 
                 model.add(blankNode, model.createProperty("renc:assignedURI"), randomUUID)
                 model.add(blankNode, model.createProperty("renc:encNLabel"), model.createLiteral(EC(
                     `@value` = Base64.getEncoder().encodeToString(encryptedObject),
-                    renc_datatype = result.getLiteral("o").datatype.uri,
+                    renc_datatype = objectDatatypeURI ?: "http://www.w3.org/2001/XMLSchema#anyURI",  // Default for resource
                 ).toString()))
 
                 val statement = model.createStatement(
