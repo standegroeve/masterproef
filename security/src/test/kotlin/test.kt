@@ -1,6 +1,6 @@
 import org.junit.jupiter.api.Test
 import security.*
-import security.crypto.generatePrekeys
+import security.crypto.KeyUtils.generatePrekeys
 import java.nio.ByteBuffer
 
 

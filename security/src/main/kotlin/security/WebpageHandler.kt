@@ -3,7 +3,7 @@ package security
 import io.vertx.core.AbstractVerticle
 import io.vertx.ext.web.Router
 import io.vertx.ext.web.RoutingContext
-import security.crypto.generatePrekeys
+import security.crypto.KeyUtils.generatePrekeys
 import java.nio.ByteBuffer
 
 class MainVerticle : AbstractVerticle() {
