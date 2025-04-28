@@ -5,8 +5,8 @@ import org.apache.jena.datatypes.xsd.XSDDatatype
 import org.apache.jena.query.*
 import org.apache.jena.rdf.model.*
 import org.apache.jena.update.UpdateAction
-import security.crypto.aesGcmDecrypt
-import security.crypto.aesGcmEncrypt
+import security.crypto.CryptoUtils.aesGcmDecrypt
+import security.crypto.CryptoUtils.aesGcmEncrypt
 import java.io.StringReader
 import java.io.StringWriter
 import java.security.MessageDigest
