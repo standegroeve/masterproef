@@ -33,7 +33,7 @@ class testEncryptionProcessor() {
                 "ex:valuesToEncrypt": [
                     { "@id": "ex:hasName" },
                     { "@id": "ex:hasAge" },
-                    { "@id": "ex:child2" }
+                    { "@id": "ex:address" }
                 ]
             }
             """.trimIndent()
