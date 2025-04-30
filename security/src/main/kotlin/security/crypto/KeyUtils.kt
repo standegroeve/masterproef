@@ -1,6 +1,7 @@
 package security.crypto
 
 import org.bouncycastle.crypto.KeyGenerationParameters
+import org.bouncycastle.crypto.generators.X25519KeyPairGenerator
 import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters
 import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters
 import org.bouncycastle.crypto.params.X25519PrivateKeyParameters
@@ -14,7 +15,7 @@ object KeyUtils {
         val secureRandom = SecureRandom()
         // Key generation parameters
         val keyGenParams = KeyGenerationParameters(secureRandom, 256)
-        val keyPairGenerator = org.bouncycastle.crypto.generators.X25519KeyPairGenerator()
+        val keyPairGenerator = X25519KeyPairGenerator()
         keyPairGenerator.init(keyGenParams)
         val keyPair = keyPairGenerator.generateKeyPair()
         val privateKey = keyPair.private as X25519PrivateKeyParameters

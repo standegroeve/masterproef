@@ -1,17 +1,17 @@
 package security.partialEncrypt
 
 import com.fasterxml.jackson.annotation.JsonProperty
-import com.fasterxml.jackson.databind.ser.Serializers.Base
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.apache.jena.datatypes.xsd.XSDDatatype
-import org.apache.jena.query.*
+import org.apache.jena.query.QueryExecution
+import org.apache.jena.query.QueryExecutionFactory
+import org.apache.jena.query.QuerySolution
+import org.apache.jena.query.ResultSet
 import org.apache.jena.rdf.model.*
 import org.apache.jena.update.UpdateAction
 import security.crypto.CryptoUtils.aesGcmDecrypt
 import security.crypto.CryptoUtils.aesGcmEncrypt
 import java.io.StringReader
 import java.io.StringWriter
-import java.security.MessageDigest
 import java.util.*
 
 data class EC(
@@ -38,10 +38,25 @@ data class EC(
 
 object RDFEncryptionProcessor {
 
-    fun encryptRDF(jsonString: String, timestampBytes: ByteArray, secretKey: ByteArray, associatedData: ByteArray, valuesToEncrypt: List<String>, tripleGroupsToEncrypt: List<List<Statement>>): String {
+    fun encryptRDF(jsonString: String, timestampBytes: ByteArray, secretKey: ByteArray, associatedData: ByteArray, valuesToEncryptList: List<String>, tripleGroupsToEncrypt: List<List<Statement>>, inputType: String = "JSON-LD", returnType: String = "JSON-LD"): String {
         val model = ModelFactory.createDefaultModel()
 
         model.read(StringReader(jsonString), "http://example.org/", "JSON-LD")
+
+        val valuesToEncrypt: List<String> = if (returnType == "Turtle") {
+            val prefixMap = model.nsPrefixMap // Map<String, String>
+            valuesToEncryptList.map { value ->
+                var shortened = value
+                prefixMap.forEach { (prefix, baseUri) ->
+                    if (value.startsWith(baseUri)) {
+                        shortened = value.replace(baseUri, "$prefix:")
+                    }
+                }
+                shortened
+            }
+        } else {
+            valuesToEncryptList
+        }
 
         //////////////////////////////////
         // Handle triple set encryption //
@@ -291,7 +306,7 @@ object RDFEncryptionProcessor {
         }
 
         val writer = StringWriter()
-        model.write(writer, "JSON-LD")
+        model.write(writer, returnType)
         return writer.toString()
     }
 
@@ -302,7 +317,7 @@ object RDFEncryptionProcessor {
 
 
 
-    fun decryptRDF(jsonString: String, secretKey: ByteArray, associatedData: ByteArray): Pair<String, Long> {
+    fun decryptRDF(jsonString: String, secretKey: ByteArray, associatedData: ByteArray, inputType: String = "Turtle"): Pair<String, Long> {
         val model = ModelFactory.createDefaultModel()
 
         var timestampBytes: Long? = null

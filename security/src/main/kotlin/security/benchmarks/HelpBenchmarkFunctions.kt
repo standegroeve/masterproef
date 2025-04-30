@@ -6,7 +6,6 @@ import org.apache.jena.rdf.model.ModelFactory
 import org.apache.jena.rdf.model.Statement
 import org.apache.jena.riot.RDFDataMgr
 import org.apache.jena.riot.RDFFormat
-import security.partialEncrypt.RDFEncryptionProcessor
 import java.io.StringReader
 import java.io.StringWriter
 
