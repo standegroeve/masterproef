@@ -36,7 +36,7 @@ data class EC(
 
 object RDFEncryptionProcessor {
 
-    fun encryptRDF(jsonString: String, timestampBytes: ByteArray, secretKey: ByteArray, associatedData: ByteArray, valuesToEncryptList: List<String>, tripleGroupsToEncrypt: List<List<Statement>>, inputType: String = "JSON-LD"): String {
+    fun encryptRDF(jsonString: String, timestampBytes: ByteArray, secretKey: ByteArray, associatedData: ByteArray, valuesToEncryptList: List<String>, tripleGroupsToEncrypt: List<List<Statement>>, inputType: String = "JSON-LD", returnType: String = "Turtle"): String {
         val model = ModelFactory.createDefaultModel()
 
         model.read(StringReader(jsonString), "http://example.org/", inputType)
@@ -308,23 +308,16 @@ object RDFEncryptionProcessor {
         }
 
         val writer = StringWriter()
-        model.write(writer, "JSON-LD")
+        model.write(writer, returnType)
         return writer.toString()
     }
 
-
-
-
-
-
-
-
-    fun decryptRDF(jsonString: String, secretKey: ByteArray, associatedData: ByteArray): Pair<String, Long> {
+    fun decryptRDF(jsonString: String, secretKey: ByteArray, associatedData: ByteArray, inputType: String = "Turtle", returnType: String = "JSON-LD"): Pair<String, Long> {
         val model = ModelFactory.createDefaultModel()
 
         var timestampBytes: Long? = null
 
-        model.read(StringReader(jsonString), null, "JSON-LD")
+        model.read(StringReader(jsonString), null, inputType)
 
         ///////////////////////////
         // Handle renc:Predicate //
@@ -352,7 +345,8 @@ object RDFEncryptionProcessor {
             val objectValue = result.get("o") as Resource
 
             val newObject = model.listStatements(objectValue, model.createProperty("http://www.w3.org/1999/02/22-rdf-syntax-ns#object"), null as RDFNode?).toList().first().`object`
-            val encPLabel = model.listStatements(objectValue, model.createProperty("http://www.w3.org/ns/renc#encPLabel"), null as RDFNode?).toList().first().`object`
+            val PLabelVal = if(inputType == "Turtle") "renc:encPLabel" else "http://www.w3.org/ns/renc#encPLabel"
+            val encPLabel = model.listStatements(objectValue, model.createProperty(PLabelVal), null as RDFNode?).toList().first().`object`
 
             val toDecrypt = EC.fromCustomString(encPLabel.toString())
             val base64Decoded = Base64.getDecoder().decode(toDecrypt.`@value`)
@@ -387,12 +381,13 @@ object RDFEncryptionProcessor {
         // Handle renc:encNLabel //
         ///////////////////////////
 
+        val NLabelVal = if(inputType == "Turtle") "<renc:encNLabel>" else "renc:encNLabel"
         val selectQueryObj = """
                     PREFIX ex: <http://example.org/>
                     PREFIX renc: <http://www.w3.org/ns/renc#>
                     SELECT ?s ?o
                     WHERE {
-                        ?s renc:encNLabel ?o .
+                        ?s $NLabelVal ?o .
                     }
                 """.trimIndent()
 
@@ -437,7 +432,8 @@ object RDFEncryptionProcessor {
                 newObject = "\"$decryptedString\"^^<$renc_datatype>"
             }
 
-            val blankNodeUUID = model.listStatements(subjectValue, model.createProperty("http://www.w3.org/ns/renc#assignedURI"), null as RDFNode?).toList().first().`object`
+            val assignedURIVal = if(inputType == "Turtle") "renc:assignedURI" else "http://www.w3.org/ns/renc#assignedURI"
+            val blankNodeUUID = model.listStatements(subjectValue, model.createProperty(assignedURIVal), null as RDFNode?).toList().first().`object`
 
             model.removeAll(subjectValue, null, null)
             val updateQuery = """
@@ -457,13 +453,13 @@ object RDFEncryptionProcessor {
         // Handle renc:encTriples //
         ////////////////////////////
 
-
+        val encTriplesVal = if(inputType == "Turtle") "<renc:encTriples>" else "renc:encTriples"
         val selectQueryEncTriples = """
                     PREFIX ex: <http://example.org/>
                     PREFIX renc: <http://www.w3.org/ns/renc#>
                     SELECT ?s ?o
                     WHERE {
-                        ?s renc:encTriples ?o .
+                        ?s $encTriplesVal ?o .
                     }
                 """.trimIndent()
 
@@ -495,11 +491,8 @@ object RDFEncryptionProcessor {
             parserModel.read(StringReader(decryptedString), "http://example.org/", "Turtle")
             model.add(parserModel)
 
-            val triplesToAdd = parserModel.listStatements().toList()
-
-            model.add(triplesToAdd)
-
-            val blankNodeUUID = model.listStatements(subjectValue, model.createProperty("http://www.w3.org/ns/renc#assignedURI"), null as RDFNode?).toList().first().`object`
+            val assignedURIVal = if(inputType == "Turtle") "renc:assignedURI" else "http://www.w3.org/ns/renc#assignedURI"
+            val blankNodeUUID = model.listStatements(subjectValue, model.createProperty(assignedURIVal), null as RDFNode?).toList().first().`object`
             model.removeAll(subjectValue, null as Property?, null as RDFNode?)
 
             val deleteQueryTriples = """
@@ -517,7 +510,7 @@ object RDFEncryptionProcessor {
         }
 
         val writer = StringWriter()
-        model.write(writer, "JSON-LD")
+        model.write(writer, returnType)
         return Pair(writer.toString(), timestampBytes!!)
     }
 
