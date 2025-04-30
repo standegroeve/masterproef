@@ -40,10 +40,25 @@ object RDFEncryptionProcessor {
 
 
 
-    fun encryptRDF(jsonString: String, timestampBytes: ByteArray, secretKey: ByteArray, associatedData: ByteArray, valuesToEncrypt: List<String>, tripleGroupsToEncrypt: List<List<Statement>>): String {
+    fun encryptRDF(jsonString: String, timestampBytes: ByteArray, secretKey: ByteArray, associatedData: ByteArray, valuesToEncryptList: List<String>, tripleGroupsToEncrypt: List<List<Statement>>, inputType: String = "JSON-LD"): String {
         val model = ModelFactory.createDefaultModel()
 
-        model.read(StringReader(jsonString), "http://example.org/", "JSON-LD")
+        model.read(StringReader(jsonString), "http://example.org/", inputType)
+
+        val valuesToEncrypt: List<String> = if (inputType == "Turtle") {
+            val prefixMap = model.nsPrefixMap // Map<String, String>
+            valuesToEncryptList.map { value ->
+                var shortened = value
+                prefixMap.forEach { (prefix, baseUri) ->
+                    if (value.startsWith(baseUri)) {
+                        shortened = value.replace(baseUri, "$prefix:")
+                    }
+                }
+                shortened
+            }
+        } else {
+            valuesToEncryptList
+        }
 
         //////////////////////////////////
         // Handle triple set encryption //
