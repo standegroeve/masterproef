@@ -179,7 +179,9 @@ class testEncryptionProcessor() {
 
         val toDecrypt = RDFEncryptionProcessor.encryptRDF(jsonString, timestampBytes, randomKey.encoded, associatedData, valuesToEncryptList, tripleGroupsToEncrypt)
 
-        RDFEncryptionProcessor.decryptRDF(toDecrypt, randomKey.encoded, associatedData)
+        println(toDecrypt)
+
+        println(RDFEncryptionProcessor.decryptRDF(toDecrypt, randomKey.encoded, associatedData).first)
     }
 
 }
