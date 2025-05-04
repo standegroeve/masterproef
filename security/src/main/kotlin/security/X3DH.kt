@@ -154,7 +154,7 @@ object X3DH {
                 ?: return null
             )
 
-            return X3dhKeysAsString.convertToX25519()
+            return X3dhKeysAsString.convertFromString()
         }
     }
 

@@ -39,7 +39,7 @@ data class X3DHPublicKeysAsString(
     @JsonProperty("kss_publicOneTimePreKeys") val publicOneTimePreKeys: String,
     @JsonProperty("kss_preKeySignature") val preKeySignature: String
 ) {
-    fun convertToX25519(): X3DHPublicPreKeys {
+    fun convertFromString(): X3DHPublicPreKeys {
         return X3DHPublicPreKeys(
             publicIdentityPreKeyEd25519 = Ed25519PublicKeyParameters(Base64.getDecoder().decode(publicIdentityPreKeyEd25519)),
             publicIdentityPreKeyX25519 = X25519PublicKeyParameters(Base64.getDecoder().decode(publicIdentityPreKeyX25519)),
