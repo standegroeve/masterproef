@@ -21,6 +21,7 @@ import security.crypto.CryptoUtils.aesGcmEncrypt
 import security.crypto.KeyUtils.generateX25519KeyPair
 import security.crypto.XEdDSA.xeddsa_verify
 import security.messages.*
+import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
 
@@ -238,6 +239,14 @@ object X3DH {
             initialCiphertext = ciphertext!!
         ), authenticationCode)
 
+        val digest = MessageDigest.getInstance("SHA-256")
+        val hashed = digest.digest(preKeys.publicIdentityPreKey.encoded)
+        actor.hashedPodId = Base64.getUrlEncoder().withoutPadding().encodeToString(hashed)
+
+        val digestTarget = MessageDigest.getInstance("SHA-256")
+        val hashedTarget = digestTarget.digest(targetPrekeys.publicIdentityPreKeyX25519.encoded)
+        actor.targetHashedPodId = Base64.getUrlEncoder().withoutPadding().encodeToString(hashedTarget)
+
         return sharedKey
     }
 
@@ -289,6 +298,14 @@ object X3DH {
             println("Initial message decryption failed")
             throw RuntimeException("Initial message decryption failed")
         }
+
+        val digest = MessageDigest.getInstance("SHA-256")
+        val hashed = digest.digest(preKeys.publicIdentityPreKey.encoded)
+        actor.hashedPodId = Base64.getUrlEncoder().withoutPadding().encodeToString(hashed)
+
+        val digestTarget = MessageDigest.getInstance("SHA-256")
+        val hashedTarget = digestTarget.digest(initialMessage.identityPreKey.encoded)
+        actor.targetHashedPodId = Base64.getUrlEncoder().withoutPadding().encodeToString(hashedTarget)
 
         return sharedKey
     }

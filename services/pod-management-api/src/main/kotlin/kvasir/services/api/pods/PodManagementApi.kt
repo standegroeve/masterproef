@@ -119,23 +119,24 @@ class PodManagementApi(
             .map { Response.noContent().build() }
     }
 
-    @PUT
+    @POST
     @Consumes(JSON_LD_MEDIA_TYPE)
     @Path("{podId}/messages")
-    fun newMessage(@PathParam("podId") podId: String, @QueryParam("senderPodId") senderPodId: String,  input: EncryptedMessage): Uni<Response> {
+    fun newMessage(@PathParam("podId") podId: String, @QueryParam("hashedPodId") hashedPodId: String,  input: EncryptedMessage): Uni<Response> {
         val podId = uriInfo.absolutePath.toString().substringBeforeLast("/messages")
         return podStore.getById(podId).chain { existingPod ->
             if (existingPod == null) {
                 Uni.createFrom().item(Response.status(Response.Status.NOT_FOUND).build())
             } else {
-                val key = if("http://localhost:8080/$senderPodId" == podId) KvasirVocab.messageOutbox else KvasirVocab.messageInbox
-                val x3dhKeys = existingPod.messageStorage ?: mutableMapOf()
-                val updatedMessages: List<EncryptedMessage> = (x3dhKeys[key] as? List<EncryptedMessage>)
-                    ?.toMutableList()
-                    ?.apply { add(input) }
-                    ?: listOf(input)
-                val updatedMessageStorage = x3dhKeys.toMutableMap().apply { put(key, updatedMessages) }
-                podStore.persist(existingPod.copy(messageStorage = updatedMessageStorage))
+                val messageStorage = existingPod.messageStorage?.toMutableMap() ?: mutableMapOf()
+
+                val updatedMessages = messageStorage[hashedPodId]?.toMutableList()?.apply {
+                    add(input)
+                } ?: mutableListOf(input)
+
+                messageStorage[hashedPodId] = updatedMessages
+
+                podStore.persist(existingPod.copy(messageStorage = messageStorage))
                     .map { Response.noContent().build() }
             }
         }
@@ -144,12 +145,12 @@ class PodManagementApi(
     @GET
     @Produces(JSON_LD_MEDIA_TYPE)
     @Path("{podId}/messages")
-    fun getNewMessages(@PathParam("podId") podId:String): Uni<MessageStorage> {
+    fun getNewMessages(@PathParam("podId") podId:String, @QueryParam("hashedPodId") hashedPodId: String): Uni<MessageStorage> {
         val podId = uriInfo.absolutePath.toString().substringBeforeLast("/messages")
         return podStore.getById(podId)
             .onItem().ifNull().failWith(NotFoundException("Pod not found"))
             .onItem().ifNotNull().transform { pod ->
-                pod?.getNewMessages()
+                pod?.getMessages(hashedPodId) as MessageStorage
             }
     }
 }
