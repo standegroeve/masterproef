@@ -56,19 +56,19 @@ fun encryptionOverheadMeasurer(tripleCount: Int): List<StorageBenchmarkResult> {
         val overheadPercentageAtomicTurtle = ((atomicEncryptTurtle!!.size - jsonOriginalSize).toDouble() / jsonOriginalSize) * 100
         results.add(StorageBenchmarkResult("Atomic Encryption Turtle", jsonOriginalSize, atomicEncryptTurtle.size, overheadPercentageAtomicTurtle))
 
-        val partialEncrypt25Turtle = RDFEncryptionProcessor.encryptRDF(json, timestampBytes, randomKey.encoded, associatedData, valuesToEncrypt25, tripleGroupsToEncrypt0, "Turtle").toByteArray()
+        val partialEncrypt25Turtle = RDFEncryptionProcessor.encryptRDF(json, timestampBytes, randomKey.encoded, associatedData, valuesToEncrypt25, tripleGroupsToEncrypt0,  returnType = "Turtle").toByteArray()
         val overheadPercentagePartial25Turtle = ((partialEncrypt25Turtle!!.size - jsonOriginalSize).toDouble() / jsonOriginalSize) * 100
         results.add(StorageBenchmarkResult("Partial Encryption 25% Turtle", jsonOriginalSize, partialEncrypt25Turtle.size, overheadPercentagePartial25Turtle))
 
-        val partialEncrypt50Turtle = RDFEncryptionProcessor.encryptRDF(json, timestampBytes, randomKey.encoded, associatedData, valuesToEncrypt50, tripleGroupsToEncrypt0, "Turtle").toByteArray()
+        val partialEncrypt50Turtle = RDFEncryptionProcessor.encryptRDF(json, timestampBytes, randomKey.encoded, associatedData, valuesToEncrypt50, tripleGroupsToEncrypt0, returnType = "Turtle").toByteArray()
         val overheadPercentagePartial50Turtle = ((partialEncrypt50Turtle!!.size - jsonOriginalSize).toDouble() / jsonOriginalSize) * 100
         results.add(StorageBenchmarkResult("Partial Encryption 50% Turtle", jsonOriginalSize, partialEncrypt50Turtle.size, overheadPercentagePartial50Turtle))
 
-        val partialEncrypt75Turtle = RDFEncryptionProcessor.encryptRDF(json, timestampBytes, randomKey.encoded, associatedData, valuesToEncrypt75, tripleGroupsToEncrypt0, "Turtle").toByteArray()
+        val partialEncrypt75Turtle = RDFEncryptionProcessor.encryptRDF(json, timestampBytes, randomKey.encoded, associatedData, valuesToEncrypt75, tripleGroupsToEncrypt0, returnType = "Turtle").toByteArray()
         val overheadPercentagePartial75Turtle = ((partialEncrypt75Turtle!!.size - jsonOriginalSize).toDouble() / jsonOriginalSize) * 100
         results.add(StorageBenchmarkResult("Partial Encryption 75% Turtle", jsonOriginalSize, partialEncrypt75Turtle.size, overheadPercentagePartial75Turtle))
 
-        val partialEncrypt100Turtle = RDFEncryptionProcessor.encryptRDF(json, timestampBytes, randomKey.encoded, associatedData, valuesToEncrypt75, tripleGroupsToEncrypt100, "Turtle").toByteArray()
+        val partialEncrypt100Turtle = RDFEncryptionProcessor.encryptRDF(json, timestampBytes, randomKey.encoded, associatedData, valuesToEncrypt75, tripleGroupsToEncrypt100, returnType = "Turtle").toByteArray()
         val overheadPercentagePartial100Turtle = ((partialEncrypt100Turtle!!.size - jsonOriginalSize).toDouble() / jsonOriginalSize) * 100
         results.add(StorageBenchmarkResult("Partial Encryption 100% Turtle", jsonOriginalSize, partialEncrypt100Turtle.size, overheadPercentagePartial100Turtle))
 

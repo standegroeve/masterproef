@@ -361,8 +361,6 @@ object RDFEncryptionProcessor {
             val subjectValue = result.getResource("s")
             val objectValue = result.get("o") as Resource
 
-            val test = model.nsPrefixMap
-
             val newObject = model.listStatements(objectValue, model.createProperty("http://www.w3.org/1999/02/22-rdf-syntax-ns#object"), null as RDFNode?).toList().first().`object`
 
             val PLabelVal = if(inputType == "Turtle") "renc:encPLabel" else "http://www.w3.org/ns/renc#encPLabel"
