@@ -15,7 +15,7 @@ import java.util.*
 object messageController {
     private val client = OkHttpClient()
 
-    fun sendMessage(senderPodId: String, targetPodId: String, encryptedMessage: EncryptedMessage, authenticationCode: String) {
+    fun sendMessage(hashedPodId: String, targetPodId: String, encryptedMessage: EncryptedMessage, authenticationCode: String) {
         val jsonLd = """
             {
                 "@context": {
@@ -32,8 +32,8 @@ object messageController {
         val requestBody = jsonLd.toRequestBody("application/ld+json".toMediaType())
 
         val request = Request.Builder()
-            .url("http://localhost:8080/${targetPodId}/messages?senderPodId=${senderPodId}")
-            .put(requestBody)
+            .url("http://localhost:8080/${targetPodId}/messages?hashedPodId=${hashedPodId}")
+            .post(requestBody)
             .header("Content-Type", "application/ld+json")
             .header("Authorization", "Bearer $authenticationCode")
             .build()
@@ -44,9 +44,9 @@ object messageController {
         }
     }
 
-    fun retrieveMessages(retrieverPodId: String, targetPodId: String, latestReceivedMessageId: Int, skippedKeys: Map<Int, ByteArray>, authenticationCode: String): List<EncryptedMessage> {
+    fun retrieveMessages(hashedPodId: String, targetPodId: String, latestReceivedMessageId: Int, skippedKeys: Map<Int, ByteArray>, authenticationCode: String): List<EncryptedMessage> {
         val requestGet = Request.Builder()
-            .url("http://localhost:8080/${targetPodId}/messages")
+            .url("http://localhost:8080/${targetPodId}/messages?hashedPodId=${hashedPodId}")
             .get()
             .header("Authorization", "Bearer $authenticationCode")
             .build()
@@ -62,9 +62,7 @@ object messageController {
 
             val responseMap: Map<String, Any> = objectMapper.readValue(responseBody)
 
-            val key = if (retrieverPodId == targetPodId) "kss:messageInbox" else "kss:messageOutbox"
-
-            val encryptedMessageList = responseMap[key]
+            val encryptedMessageList = responseMap["kss:messageInbox"]
 
             val encryptedMessages = when (encryptedMessageList) {
                 // If it's a list, process each item
@@ -81,7 +79,7 @@ object messageController {
                             .convertToEncryptedMessage()
                     )
                 }
-                else -> throw RuntimeException("Unexpected data format for 'kss:messageInbox' or 'kss:messageOutbox'")
+                else -> throw RuntimeException("Unexpected data format for kss:messageInbox")
             }
             val filteredMessages = encryptedMessages.filter { message ->
                 message.messageId > latestReceivedMessageId || skippedKeys.containsKey(message.messageId)

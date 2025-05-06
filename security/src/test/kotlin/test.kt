@@ -6,10 +6,12 @@ import java.nio.ByteBuffer
 
 class securityTests() {
 
-    private val authCode = "eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJLcEFaaHhiUGVrZnN4WGdMLTA1VkZaQ1V4dkx2ZnNhWnpwR2V4LWVEaV80In0.eyJleHAiOjE3NDE1NzgyNjEsImlhdCI6MTc0MTU0OTQ3NiwiYXV0aF90aW1lIjoxNzQxNTQ5NDYxLCJqdGkiOiI1NmU3OTQwNy0yYzY1LTRkMWUtODZhMi03NjZkZDdiYmFkNzAiLCJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjgyODAvcmVhbG1zL2FsaWNlIiwiYXVkIjoiYWNjb3VudCIsInN1YiI6ImVkMDQ1YmM2LTA2YTUtNGI2Yi05MWYyLTcxN2RmODBhNDRiYyIsInR5cCI6IkJlYXJlciIsImF6cCI6Im15LXB1YmxpYy1jbGllbnQiLCJzaWQiOiIxNGQ0Y2Y3Yi0zY2E1LTRiNmMtYmFmYi1lYzU2NzUwMzM3YzciLCJhY3IiOiIxIiwiYWxsb3dlZC1vcmlnaW5zIjpbImh0dHA6Ly9sb2NhbGhvc3Q6NDIwMCJdLCJyZWFsbV9hY2Nlc3MiOnsicm9sZXMiOlsib3duZXIiLCJkZWZhdWx0LXJvbGVzLWFsaWNlIiwib2ZmbGluZV9hY2Nlc3MiLCJ1bWFfYXV0aG9yaXphdGlvbiJdfSwicmVzb3VyY2VfYWNjZXNzIjp7ImFjY291bnQiOnsicm9sZXMiOlsibWFuYWdlLWFjY291bnQiLCJtYW5hZ2UtYWNjb3VudC1saW5rcyIsInZpZXctcHJvZmlsZSJdfX0sInNjb3BlIjoib3BlbmlkIHByb2ZpbGUgZW1haWwiLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwibmFtZSI6IkFsaWNlIERlbW8iLCJwcmVmZXJyZWRfdXNlcm5hbWUiOiJhbGljZSIsImdpdmVuX25hbWUiOiJBbGljZSIsImZhbWlseV9uYW1lIjoiRGVtbyIsImVtYWlsIjoiYWxpY2VAZXhhbXBsZS5vcmcifQ.eLyi6zzLi6qy4y6u5r7kVxKxaz5diWaa4jqoXICunalpIqx1UmfCjTya68VhmO-HJElEaxTc8H-Omqax9476jVeoAMQGNxm_zd6xQdM2qvC7qyWbcGwdSGZU6MC7GQUJ7NYYbI3fpY3aLhKCrGwYir4XilA0ixudbU9bdEz819_saSDIFmz5K7Y85WMbpdjfc7hTMagBZ_rBfA2Z4raUw08T_YaB190ShAeuy3B9IC97nf0wj-dIK0xlz2rF8KlL-oA0OYlRYCADsafOSPmwhI3CVcg1D-0LY9OIKZsjbTT-fBjasQQ6KaURE8w5d3mTnggEy9sNlaEzvrgY3puCPQ"
+    private val authCode = "eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJsaXBYUFRRMHdud0FIaGpJdWdOdWNoYXRESk5KOEI0UFJvTEFLU3kzcFpnIn0.eyJleHAiOjE3NDY1Njc1MTAsImlhdCI6MTc0NjU1NjcxMCwiYXV0aF90aW1lIjoxNzQ2NTU2Njk1LCJqdGkiOiJmYWYwYjZkYi0yOWI1LTQ0ZmMtYmIxZS1kODg0ZTg0YzkwYjYiLCJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjgyODAvcmVhbG1zL2FsaWNlYm9iIiwiYXVkIjoiYWNjb3VudCIsInN1YiI6IjI3ZTdlMmQyLTQyZWUtNGI3YS1iMGI5LTUzOGM3ZDEwZjM3NiIsInR5cCI6IkJlYXJlciIsImF6cCI6InB1YmxpYy1jbGllbnQiLCJzaWQiOiJjZjk0NTYwYy0xYzdlLTRjZDMtOGQ2MS1lNzk3MTIwNTZjNTQiLCJhY3IiOiIxIiwiYWxsb3dlZC1vcmlnaW5zIjpbImh0dHA6Ly9sb2NhbGhvc3Q6NDIwMCJdLCJyZWFsbV9hY2Nlc3MiOnsicm9sZXMiOlsib3duZXIiLCJkZWZhdWx0LXJvbGVzLWFsaWNlYm9iIiwib2ZmbGluZV9hY2Nlc3MiLCJ1bWFfYXV0aG9yaXphdGlvbiJdfSwicmVzb3VyY2VfYWNjZXNzIjp7ImFjY291bnQiOnsicm9sZXMiOlsibWFuYWdlLWFjY291bnQiLCJtYW5hZ2UtYWNjb3VudC1saW5rcyIsInZpZXctcHJvZmlsZSJdfX0sInNjb3BlIjoib3BlbmlkIHByb2ZpbGUgZW1haWwiLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwibmFtZSI6IkFsaWNlYm9iIERlbW8iLCJwcmVmZXJyZWRfdXNlcm5hbWUiOiJhbGljZWJvYiIsImdpdmVuX25hbWUiOiJBbGljZWJvYiIsImZhbWlseV9uYW1lIjoiRGVtbyIsImVtYWlsIjoiYWxpY2Vib2JAZXhhbXBsZS5vcmcifQ.mTR7GGEG0AZqESlz34829nTDFc8GyiPjo0pVSSELw5PenhNvWp_pMpid2JvpFtGZ7gUu6L9gh3dav3bcfqXeOG-d2HiEpVnPdnpIHZtgeD7t8xPO7z3eOck81k7bE21kz1SMVctY8lFgp0vJ35bsgkntZhYPnKswvV_381ALpVWTw6hpI3jdcpG2w15XbRSpCgk05E1W62KEkVxt0bfxJmYLNW67Wc1aUsgiUrAkdH48wYvU_pijrzB1xfwF0tw7TBufhXRikDXpVcny6f3MgXRB82eOHAQ5GBI4FmGSyUSA-MnbIq8N4HU9Y6oa8vbVOp_QZ2HWx8pBLQGU8dbKXA"
 
     @Test
     fun testGetPublicPrekeys() {
+        val commonPod = "alicebob"
+
         val Alice = User("alice")
         val Bob = User("bob")
         Alice.preKeys = generatePrekeys()
@@ -44,15 +46,17 @@ class securityTests() {
 
     @Test
     fun outOfOrderMessagesTest() {
+        val commonPod = "alicebob"
+
         val targetPodId = "bob"
         val Alice = User("alice")
         val Bob = User("bob")
         Alice.preKeys = generatePrekeys()
         Bob.preKeys = generatePrekeys()
         /* START X3DH */
-        X3DH.uploadPreKeys(Bob.podId, Bob.preKeys!!.getPublic(), authCode)
-        Alice.sharedKey = X3DH.sendInitialMessage(Alice, Bob.podId, Alice.preKeys!!, authCode)
-        Bob.sharedKey = X3DH.processInitialMessage(Bob, Bob.podId, Bob.preKeys!!, authCode)
+        X3DH.uploadPreKeys(commonPod, Bob.preKeys!!.getPublic(), authCode)
+        Alice.sharedKey = X3DH.sendInitialMessage(Alice, commonPod, Alice.preKeys!!, authCode)
+        Bob.sharedKey = X3DH.processInitialMessage(Bob, commonPod, Bob.preKeys!!, authCode)
         /* X3DH FINISHED - START DOUBLE RATCHET ALGORITHM */
 
         /*
@@ -60,35 +64,35 @@ class securityTests() {
          */
         val timestamp = System.currentTimeMillis()
 
-        Alice.sendInitialMessage(targetPodId, "messageA1".toByteArray(), ByteBuffer.allocate(8).putLong(timestamp).array(), authCode)
-        Alice.sendMessage(targetPodId, "messageA2".toByteArray(), ByteBuffer.allocate(8).putLong(timestamp+1).array(), authCode)
+        Alice.sendInitialMessage(commonPod, "messageA1".toByteArray(), ByteBuffer.allocate(8).putLong(timestamp).array(), authCode)
+        Alice.sendMessage(commonPod, "messageA2".toByteArray(), ByteBuffer.allocate(8).putLong(timestamp+1).array(), authCode)
 
-        val decryptA1 = Bob.receiveMessage(targetPodId, authCode)
+        val decryptA1 = Bob.receiveMessage(commonPod, authCode)
 
         /*
             Bob creates B1,2,3,4 but only sends B1 + B4
          */
 
-        val messageB1 = Bob.sendMessage(targetPodId, "messageB1".toByteArray(), ByteBuffer.allocate(8).putLong(timestamp+2).array(), authCode)
-        val messageB2 = Bob.sendMessage(targetPodId, "messageB2".toByteArray(), ByteBuffer.allocate(8).putLong(timestamp+3).array(), authCode)
-        val messageB3 = Bob.sendMessage(targetPodId, "messageB3".toByteArray(), ByteBuffer.allocate(8).putLong(timestamp+4).array(), authCode)
-        val messageB4 = Bob.sendMessage(targetPodId, "messageB4".toByteArray(), ByteBuffer.allocate(8).putLong(timestamp+5).array(), authCode)
+        val messageB1 = Bob.sendMessage(commonPod, "messageB1".toByteArray(), ByteBuffer.allocate(8).putLong(timestamp+2).array(), authCode)
+        val messageB2 = Bob.sendMessage(commonPod, "messageB2".toByteArray(), ByteBuffer.allocate(8).putLong(timestamp+3).array(), authCode)
+        val messageB3 = Bob.sendMessage(commonPod, "messageB3".toByteArray(), ByteBuffer.allocate(8).putLong(timestamp+4).array(), authCode)
+        val messageB4 = Bob.sendMessage(commonPod, "messageB4".toByteArray(), ByteBuffer.allocate(8).putLong(timestamp+5).array(), authCode)
 
-        val decryptB1234 = Alice.receiveMessage(targetPodId, authCode)
+        val decryptB1234 = Alice.receiveMessage(commonPod, authCode)
 
         /*
             Alice creates and sends A3
          */
 
-        val messageA3 = Alice.sendMessage(targetPodId, "messageA3".toByteArray(), ByteBuffer.allocate(8).putLong(timestamp+6).array(), authCode)
-        val decryptA3 = Bob.receiveMessage(targetPodId, authCode)
+        val messageA3 = Alice.sendMessage(commonPod, "messageA3".toByteArray(), ByteBuffer.allocate(8).putLong(timestamp+6).array(), authCode)
+        val decryptA3 = Bob.receiveMessage(commonPod, authCode)
 
         /*
             Bob creates and send B5
          */
 
-        val messageB5 = Bob.sendMessage(targetPodId, "messageB5".toByteArray(), ByteBuffer.allocate(8).putLong(timestamp+7).array(), authCode)
-        val decryptB5 = Alice.receiveMessage(targetPodId, authCode)
+        val messageB5 = Bob.sendMessage(commonPod, "messageB5".toByteArray(), ByteBuffer.allocate(8).putLong(timestamp+7).array(), authCode)
+        val decryptB5 = Alice.receiveMessage(commonPod, authCode)
 
 
         // ASSERTIONS

@@ -1,5 +1,7 @@
 package kvasir.definitions.security
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonProperty
 import kvasir.definitions.rdf.KvasirVocab
 
@@ -18,7 +20,5 @@ data class EncryptedMessage(
 
 data class MessageStorage(
     @JsonProperty(KvasirVocab.messageInbox)
-    val messageInbox: List<EncryptedMessage>,
-    @JsonProperty(KvasirVocab.messageOutbox)
-    val messageOutbox: List<EncryptedMessage>
+    val messageInbox: List<EncryptedMessage>
 )
