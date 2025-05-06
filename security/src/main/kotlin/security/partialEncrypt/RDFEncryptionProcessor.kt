@@ -210,7 +210,7 @@ object RDFEncryptionProcessor {
                 resultsListObj.add(resultsObj.nextSolution())
             }
 
-            val encryptedObject = aesGcmEncrypt(timestampBytes + value.toByteArray(), secretKey, associatedData)
+            val encryptedObject = aesGcmEncrypt(timestampBytes + shortenedValue.toByteArray(), secretKey, associatedData)
 
             for (result in resultsListObj) {
                 val subjectValue = result.getResource("s")
