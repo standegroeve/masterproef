@@ -65,16 +65,16 @@ object RDFEncryptionProcessor {
         //////////////////////////////////
 
         for (group in tripleGroupsToEncrypt) {
-            val queryHelper = StringBuilder()
+            val stringBuilder = StringBuilder()
 
             group.joinToString("\n") { stmt ->
-                queryHelper.append("<${stmt.subject}> <${stmt.predicate}> \"${stmt.`object`}\" .\n")
+                stringBuilder.append("<${stmt.subject}> <${stmt.predicate}> \"${stmt.`object`}\" .\n")
             }
-            if (queryHelper.isNotEmpty()) {
-                queryHelper.setLength(queryHelper.length - 1)  // Remove the last character (newline)
+            if (stringBuilder.isNotEmpty()) {
+                stringBuilder.setLength(stringBuilder.length - 1)  // Remove the last character (newline)
             }
 
-            val valueToEncrypt = queryHelper.toString()
+            val valueToEncrypt = stringBuilder.toString()
             val encryptedValue = aesGcmEncrypt(timestampBytes + valueToEncrypt.toByteArray(), secretKey, associatedData)
 
             val ECString = EC(
@@ -183,12 +183,24 @@ object RDFEncryptionProcessor {
             // Handle object uri's alone //
             ///////////////////////////////
 
+            val shortenedValue = run {
+                val prefixMap = model.nsPrefixMap
+                var shortened = value
+                for ((prefix, baseUri) in prefixMap) {
+                    if (value.startsWith(baseUri)) {
+                        shortened = value.replaceFirst(baseUri, "$prefix:")
+                        break // Stop after the first match
+                    }
+                }
+                shortened
+            }
+
             val selectQueryObj = """
                     PREFIX ex: <http://example.org/>
                     PREFIX renc: <http://www.w3.org/ns/renc#>
                     SELECT ?s ?p
                     WHERE {
-                        ?s ?p "$value" .
+                        ?s ?p "$shortenedValue" .
                     }
                 """.trimIndent()
 
@@ -200,7 +212,7 @@ object RDFEncryptionProcessor {
                 resultsListObj.add(resultsObj.nextSolution())
             }
 
-            val encryptedObject = aesGcmEncrypt(timestampBytes + value.toByteArray(), secretKey, associatedData)
+            val encryptedObject = aesGcmEncrypt(timestampBytes + shortenedValue.toByteArray(), secretKey, associatedData)
 
             for (result in resultsListObj) {
                 val subjectValue = result.getResource("s")
@@ -212,10 +224,10 @@ object RDFEncryptionProcessor {
                 val updateQuery = """
                         PREFIX ex: <http://example.org/>
                         PREFIX renc: <http://www.w3.org/ns/renc#>
-                        DELETE { <$subjectValue> <$predicateValue> "$value" }
-                        INSERT { <$subjectValue> <$predicateValue> "$blankNode" }
+                        DELETE { <$subjectValue> <$predicateValue> "$shortenedValue" }
+                        INSERT { <$subjectValue> <$predicateValue> "$randomUUID" }
                         WHERE {
-                            <$subjectValue> <$predicateValue> "$value" .
+                            <$subjectValue> <$predicateValue> "$shortenedValue" .
                         }
                     """.trimIndent()
 
@@ -224,7 +236,6 @@ object RDFEncryptionProcessor {
                     `@value` = Base64.getEncoder().encodeToString(encryptedObject),
                     renc_datatype = XSDDatatype.XSDstring.uri
                 ).toString()))
-
 
                 UpdateAction.parseExecute(updateQuery, model)
             }
