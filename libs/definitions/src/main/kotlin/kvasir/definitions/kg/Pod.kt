@@ -39,7 +39,7 @@ data class Pod(
     @JsonProperty(KvasirVocab.configuration)
     val configuration: Map<String, Any>,
     @JsonProperty(KvasirVocab.messageStorage)
-    val messageStorage: Map<String, Any>? = null
+    val messageStorage: Map<String, List<Any>>? = null
 ) {
 
     @JsonIgnore
