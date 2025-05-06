@@ -388,14 +388,8 @@ class MainVerticle : AbstractVerticle() {
 
             if (isNotInitialized) {
                 if (sender == "alice") {
-                    try {
-                        Alice.sendInitialMessage(targetPodId, message.toByteArray(), timestampBytes, authCode)
-                        isNotInitialized = false
-                    }
-                    catch (e: Exception) {
-                        println("exception: $e")
-                        throw RuntimeException(e)
-                    }
+                    Alice.sendInitialMessage(targetPodId, message.toByteArray(), timestampBytes, authCode)
+                    isNotInitialized = false
                 } else {
                     Bob.sendInitialMessage(targetPodId, message.toByteArray(), timestampBytes, authCode)
                     isNotInitialized = false
