@@ -39,7 +39,7 @@ data class Pod(
     @JsonProperty(KvasirVocab.configuration)
     val configuration: Map<String, Any>,
     @JsonProperty(KvasirVocab.messageStorage)
-    val messageStorage: Map<String, Any>? = null
+    val messageStorage: Map<String, List<Any>>? = null
 ) {
 
     @JsonIgnore
@@ -60,19 +60,21 @@ data class Pod(
     }
 
     @JsonIgnore
-    fun getNewMessages(): MessageStorage {
-        val inBoxMessages = messageStorage?.get(KvasirVocab.messageInbox) as? List<*>
-        val outBoxMessages = messageStorage?.get(KvasirVocab.messageOutbox) as? List<*>
-        if (inBoxMessages == null && outBoxMessages == null)
+    fun getMessages(hashedPodId: String): MessageStorage {
+        if (messageStorage.isNullOrEmpty()) {
+
+
             throw NotFoundException("No new messages")
-        return MessageStorage(
-            (inBoxMessages ?: emptyList<EncryptedMessage>()).map {
-                JsonObject(it as Map<String, Any>).mapTo(EncryptedMessage::class.java)
-            },
-            (outBoxMessages ?: emptyList<EncryptedMessage>()).map {
-                JsonObject(it as Map<String, Any>).mapTo(EncryptedMessage::class.java)
-            }
-        )
+        }
+        val rawMessages = messageStorage[hashedPodId]
+
+        if (rawMessages.isNullOrEmpty()) {
+            throw NotFoundException("No messages found for this conversation")
+        }
+        val mappedMessages = rawMessages.map {
+            JsonObject(it as Map<String, Any>).mapTo(EncryptedMessage::class.java)
+        }
+        return MessageStorage(mappedMessages)
     }
 }
 

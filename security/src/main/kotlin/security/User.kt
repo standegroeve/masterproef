@@ -24,6 +24,9 @@ class User(val podId: String) {
     var prevPublicKey: ByteArray? = null
     var DHKeyPair: Pair<X25519PublicKeyParameters, X25519PrivateKeyParameters>? = null
 
+    var hashedPodId: String? = null
+    var targetHashedPodId: String? = null
+
     // Out-of-order message handling
     var skippedKeys = mutableMapOf<Int, ByteArray>()
     var sendingChainLength: Int = 0
@@ -59,14 +62,14 @@ class User(val podId: String) {
         val encrpytedMessage = EncryptedMessage(messageId + 1, DHKeyPair!!.first.encoded, ciphertext, sequenceNumber, PN)
 
         // sends the message to the pod
-        messageController.sendMessage(podId, targetPod, encrpytedMessage, authenticationCode)
+        messageController.sendMessage(targetHashedPodId!!, targetPod, encrpytedMessage, authenticationCode)
 
         return String(ciphertext, Charsets.UTF_8)
     }
 
     fun receiveMessage(targetPod: String, authenticationCode: String): List<DecryptedMessage> {
         // Retreive messages which we havent seen already or whose key isnt in skippedKeys
-        val encryptedMessages = messageController.retrieveMessages(podId, targetPod, latestReceivedMessageId, skippedKeys, authenticationCode)
+        val encryptedMessages = messageController.retrieveMessages(hashedPodId!!, targetPod, latestReceivedMessageId, skippedKeys, authenticationCode)
 
         var messagesList = mutableListOf<DecryptedMessage>()
         for (i in 0..encryptedMessages.size-1) {
