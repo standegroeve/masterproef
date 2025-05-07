@@ -22,6 +22,7 @@ import security.crypto.CryptoUtils.aesGcmEncrypt
 import security.crypto.CryptoUtils.aesGcmDecrypt
 import security.crypto.KeyUtils.generateX25519KeyPair
 import security.crypto.XEdDSA.xeddsa_verify
+import java.security.MessageDigest
 
 
 object X3DH {
@@ -66,15 +67,15 @@ object X3DH {
     /*
         Deletes existing prekeys (if any exist with same podId) and uploads new ones
      */
-    fun uploadPreKeys(podId: String, preKeys: X3DHPublicPreKeys, authenticationCode: String) {
+    fun uploadPreKeys(podId: String, preKeys: X3DHPublicPreKeys, keysId: String, authenticationCode: String) {
         // If preKeys already exist with same podId, fetch them
-        val prevPreKeys = getPublicX3DHKeys(podId, authenticationCode)
+        val prevPreKeys = getPublicX3DHKeys(podId, keysId, authenticationCode)
 
         var keysToDelete = ""
         if (prevPreKeys != null) {
             keysToDelete = """
                 {
-                "@id": "ex:$podId",
+                "@id": "ex:$keysId",
                 "@type": "kss:PublicPreKeys",
                 "kss:publicIdentityPreKeyEd25519": "${Base64.getEncoder().encodeToString(prevPreKeys.publicIdentityPreKeyEd25519.encoded)}",
                 "kss:publicIdentityPreKeyX25519": "${Base64.getEncoder().encodeToString(prevPreKeys.publicIdentityPreKeyX25519.encoded)}",
@@ -92,7 +93,7 @@ object X3DH {
             	  "ex": "http://example.org/"
               },
               "kss:insert": [{
-            	"@id": "ex:$podId",
+            	"@id": "ex:$keysId",
                   "@type": "kss:PublicPreKeys",
                   "kss:publicIdentityPreKeyEd25519": "${Base64.getEncoder().encodeToString(preKeys.publicIdentityPreKeyEd25519.encoded)}",
                   "kss:publicIdentityPreKeyX25519": "${Base64.getEncoder().encodeToString(preKeys.publicIdentityPreKeyX25519.encoded)}",
@@ -124,9 +125,9 @@ object X3DH {
     /*
         Fetch the publicX3DHKeys from a pod
      */
-    private fun getPublicX3DHKeys(podId: String, authenticationCode: String): X3DHPublicPreKeys? {
+    private fun getPublicX3DHKeys(podId: String, keysId: String, authenticationCode: String): X3DHPublicPreKeys? {
         val json = """
-            { "query": "{ publicPreKeys @filter(if: \"id==http://example.org/$podId\") { id kss_publicIdentityPreKeyEd25519 kss_publicIdentityPreKeyX25519 kss_publicSignedPreKey kss_publicOneTimePreKeys kss_preKeySignature } }" }
+            { "query": "{ publicPreKeys @filter(if: \"id==http://example.org/$keysId\") { id kss_publicIdentityPreKeyEd25519 kss_publicIdentityPreKeyX25519 kss_publicSignedPreKey kss_publicOneTimePreKeys kss_preKeySignature } }" }
             """.trimIndent()
 
 
@@ -167,22 +168,17 @@ object X3DH {
     /*
         Do the DH-calculations to make and send the initial message
      */
-    fun sendInitialMessage(
-        actor: User,
-        podId: String,
-        preKeys: X3DHPreKeys,
-        authenticationCode: String
-    ): ByteArray {
-        val targetPrekeys: X3DHPublicPreKeys? = getPublicX3DHKeys(podId, authenticationCode)
+    fun sendInitialMessage(actor: User, podId: String, preKeys: X3DHPreKeys, targetId: String, keysId: String, authenticationCode: String): ByteArray {
+        val targetPrekeys: X3DHPublicPreKeys? = getPublicX3DHKeys(podId, keysId, authenticationCode)
 
         if (targetPrekeys == null) {
             println("TargetPreKeys were null")
             throw RuntimeException("TargetPrekeys were null")
         }
 
-        actor.initialDHPublicKeyMap!!.put(podId, targetPrekeys.publicSignedPreKey.encoded)
-        actor.targetPublicKeyMap!!.put(podId, targetPrekeys.publicIdentityPreKeyX25519.encoded)
-        actor.DHKeyPairMap!!.put(podId, generateX25519KeyPair())
+        actor.initialDHPublicKeyMap!!.put(targetId, targetPrekeys.publicSignedPreKey.encoded)
+        actor.targetPublicKeyMap!!.put(targetId, targetPrekeys.publicIdentityPreKeyX25519.encoded)
+        actor.DHKeyPairMap!!.put(targetId, generateX25519KeyPair())
 
         // Verify the signature
         val verified = xeddsa_verify(
@@ -222,9 +218,15 @@ object X3DH {
         /*
             Generate ciphertext
          */
-        val associatedData: ByteArray = preKeys.publicIdentityPreKey.encoded + targetPrekeys.publicIdentityPreKeyX25519.encoded
 
-        println("encodeedffdqfsdfds:$podId " + Base64.getEncoder().encodeToString(associatedData))
+        println()
+        println("${actor.podId}'s for $targetId public ID prekey: ${Base64.getEncoder().encodeToString(preKeys.publicIdentityPreKey.encoded)}")
+        println("${actor.podId}'s fetched from $targetId public ID prekey: ${Base64.getEncoder().encodeToString(targetPrekeys.publicIdentityPreKeyX25519.encoded)}")
+        println("${actor.podId}'s for $targetId sharedKey: ${Base64.getEncoder().encodeToString(sharedKey)}")
+        println()
+
+
+        val associatedData: ByteArray = preKeys.publicIdentityPreKey.encoded + targetPrekeys.publicIdentityPreKeyX25519.encoded
 
         val plaintext: ByteArray = "Handshake send initial message".toByteArray()
         val ciphertext = aesGcmEncrypt(plaintext, sharedKey, associatedData)
@@ -233,12 +235,20 @@ object X3DH {
         /*
             Send the initial message
          */
-        sendInitialMessageToKvasir(podId, InitialMessage(
+        sendInitialMessageToKvasir(podId, keysId, InitialMessage(
             identityPreKey = preKeys.publicIdentityPreKey,
             ephemeralPreKey = ephemeralKeyPair.first,
             preKeyIdentifiers = oneTimeKeysUsed,
             initialCiphertext = ciphertext!!
         ), authenticationCode)
+
+        val digest = MessageDigest.getInstance("SHA-256")
+        val hashed = digest.digest(preKeys.publicIdentityPreKey.encoded + sharedKey)
+        actor.hashedPodId.put(targetId, Base64.getUrlEncoder().withoutPadding().encodeToString(hashed))
+
+        val digestTarget = MessageDigest.getInstance("SHA-256")
+        val hashedTarget = digestTarget.digest(targetPrekeys.publicIdentityPreKeyX25519.encoded + sharedKey)
+        actor.targetHashedPodId.put(targetId,Base64.getUrlEncoder().withoutPadding().encodeToString(hashedTarget))
 
         return sharedKey
     }
@@ -247,20 +257,19 @@ object X3DH {
     /*
         Fetch and process the initial message
      */
-    fun processInitialMessage(actor: User, podId: String, preKeys: X3DHPreKeys, authenticationCode: String, sender: String): ByteArray {
+    fun processInitialMessage(actor: User, podId: String, preKeys: X3DHPreKeys, targetId: String, keysId: String, authenticationCode: String): ByteArray {
         /*
             Fetch the initial message
          */
-        val initialMessage = retrieveInitialMessageFromKvasir(podId, authenticationCode)
+        val initialMessage = retrieveInitialMessageFromKvasir(podId, keysId, authenticationCode)
 
         if (initialMessage == null) {
             println("InitialMessage was null")
             throw RuntimeException("InitialMessage was null")
         }
 
-        actor.DHKeyPairMap.put(sender, Pair(actor.preKeysMap.get(podId)!!.publicSignedPrekey, actor.preKeysMap.get(podId)!!.privateSignedPrekey))
-
-        actor.targetPublicKeyMap.put(sender, initialMessage.identityPreKey.encoded)
+        actor.DHKeyPairMap.put(targetId, Pair(actor.preKeysMap.get(targetId)!!.publicSignedPrekey, actor.preKeysMap.get(targetId)!!.privateSignedPrekey))
+        actor.targetPublicKeyMap.put(targetId, initialMessage.identityPreKey.encoded)
 
         /*
             Calculate sharedKey
@@ -282,6 +291,12 @@ object X3DH {
             sharedKey = HKDF(salt, F + DH1 + DH2 + DH3 + DH4, info, 32)
         }
 
+        println()
+        println("${actor.podId}'s fetched from $targetId public ID prekey: ${Base64.getEncoder().encodeToString(initialMessage.identityPreKey.encoded)}")
+        println("${actor.podId}'s for $targetId public ID prekey: ${Base64.getEncoder().encodeToString(preKeys.publicIdentityPreKey.encoded)}")
+        println("${actor.podId}'s for $targetId sharedKey: ${Base64.getEncoder().encodeToString(sharedKey)}")
+        println()
+
         val associatedData: ByteArray = initialMessage.identityPreKey.encoded + preKeys.publicIdentityPreKey.encoded
         println("encoded: " + Base64.getEncoder().encodeToString(associatedData))
 
@@ -292,16 +307,24 @@ object X3DH {
             throw RuntimeException("Initial message decryption failed")
         }
 
+        val digest = MessageDigest.getInstance("SHA-256")
+        val hashed = digest.digest(preKeys.publicIdentityPreKey.encoded + sharedKey)
+        actor.hashedPodId.put(targetId, Base64.getUrlEncoder().withoutPadding().encodeToString(hashed))
+
+        val digestTarget = MessageDigest.getInstance("SHA-256")
+        val hashedTarget = digestTarget.digest(initialMessage.identityPreKey.encoded + sharedKey)
+        actor.targetHashedPodId.put(targetId,Base64.getUrlEncoder().withoutPadding().encodeToString(hashedTarget))
+
         return sharedKey
     }
 
     /*
         Delete initial message (if it already exists with same podId) and send a new one to Kvaisr
      */
-    private fun sendInitialMessageToKvasir(targetPodId: String, initialMessage: InitialMessage, authenticationCode: String) {
+    private fun sendInitialMessageToKvasir(targetPodId: String, keysId: String, initialMessage: InitialMessage, authenticationCode: String) {
 
         // If an initial message already exist with same podId, fetch it
-        val prevInitialMessage = retrieveInitialMessageFromKvasir(targetPodId, authenticationCode)
+        val prevInitialMessage = retrieveInitialMessageFromKvasir(targetPodId, keysId, authenticationCode)
 
         // If a message already exists with same podId, delete it
         if (prevInitialMessage != null) {
@@ -313,7 +336,7 @@ object X3DH {
                   },
                   "kss:insert": [],
                   "kss:delete": [ {
-                        "@id": "ex:$targetPodId",
+                        "@id": "ex:$keysId",
                         "@type": "kss:InitialMessage",
                         "kss:identityPreKey": "${Base64.getEncoder().encodeToString(prevInitialMessage.identityPreKey.encoded)}",
                         "kss:ephemeralPreKey": "${Base64.getEncoder().encodeToString(prevInitialMessage.ephemeralPreKey.encoded)}",
@@ -347,7 +370,7 @@ object X3DH {
             	  "ex": "http://example.org/"
               },
               "kss:insert": [{
-            	  "@id": "ex:$targetPodId",
+            	  "@id": "ex:$keysId",
                   "@type": "kss:InitialMessage",
                   "kss:identityPreKey": "${Base64.getEncoder().encodeToString(initialMessage.identityPreKey.encoded)}",
                   "kss:ephemeralPreKey": "${Base64.getEncoder().encodeToString(initialMessage.ephemeralPreKey.encoded)}",
@@ -378,9 +401,9 @@ object X3DH {
     /*
         Retrieve the initial message from Kvasir
      */
-    private fun retrieveInitialMessageFromKvasir(targetPodId: String, authenticationCode: String): InitialMessage? {
+    private fun retrieveInitialMessageFromKvasir(targetPodId: String, keysId: String, authenticationCode: String): InitialMessage? {
         val json = """
-            { "query": "{ initialMessages @filter(if: \"id==http://example.org/$targetPodId\") { id kss_identityPreKey kss_ephemeralPreKey kss_preKeyIdentifiers kss_initialCiphertext } }" }
+            { "query": "{ initialMessages @filter(if: \"id==http://example.org/$keysId\") { id kss_identityPreKey kss_ephemeralPreKey kss_preKeyIdentifiers kss_initialCiphertext } }" }
             """.trimIndent()
 
         val requestBody = json.toRequestBody("application/json".toMediaType())
