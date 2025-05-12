@@ -49,7 +49,6 @@ object KvasirVocab {
     const val messageStorageUri = "${baseUri}messageStorageUri"
     const val messageStorage = "${baseUri}messageStorage"
     const val messageInbox = "${baseUri}messageInbox"
-    const val messageOutbox = "${baseUri}messageOutbox"
     const val messageId = "${baseUri}messageId"
     const val publicKey = "${baseUri}publicKey"
     const val cipherText = "${baseUri}cipherText"

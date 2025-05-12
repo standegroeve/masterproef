@@ -2,7 +2,7 @@ import org.apache.jena.rdf.model.ModelFactory
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
-import security.crypto.generateX25519KeyPair
+import security.crypto.KeyUtils.generateX25519KeyPair
 import security.partialEncrypt.RDFEncryptionProcessor
 import java.io.StringReader
 
@@ -33,7 +33,7 @@ class testEncryptionProcessor() {
                 "ex:valuesToEncrypt": [
                     { "@id": "ex:hasName" },
                     { "@id": "ex:hasAge" },
-                    { "@id": "ex:child2" }
+                    { "@id": "ex:test2" }
                 ]
             }
             """.trimIndent()
@@ -179,7 +179,9 @@ class testEncryptionProcessor() {
 
         val toDecrypt = RDFEncryptionProcessor.encryptRDF(jsonString, timestampBytes, randomKey.encoded, associatedData, valuesToEncryptList, tripleGroupsToEncrypt)
 
-        RDFEncryptionProcessor.decryptRDF(toDecrypt, randomKey.encoded, associatedData)
+        println(toDecrypt)
+
+        println(RDFEncryptionProcessor.decryptRDF(toDecrypt, randomKey.encoded, associatedData).first)
     }
 
 }

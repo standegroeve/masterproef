@@ -1,14 +1,12 @@
 package security.partialEncrypt
 
 import com.fasterxml.jackson.annotation.JsonProperty
-import com.fasterxml.jackson.databind.ser.Serializers.Base
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.apache.jena.datatypes.xsd.XSDDatatype
 import org.apache.jena.query.*
 import org.apache.jena.rdf.model.*
 import org.apache.jena.update.UpdateAction
-import security.crypto.aesGcmDecrypt
-import security.crypto.aesGcmEncrypt
+import security.crypto.CryptoUtils.aesGcmDecrypt
+import security.crypto.CryptoUtils.aesGcmEncrypt
 import java.io.StringReader
 import java.io.StringWriter
 import java.security.MessageDigest
@@ -38,36 +36,41 @@ data class EC(
 
 object RDFEncryptionProcessor {
 
-    private fun sha256Hash(input: String): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        val hashBytes = digest.digest(input.toByteArray())
-        return Base64.getEncoder().encodeToString(hashBytes) // Encode as Base64 for readability
-    }
+    fun encryptRDF(jsonString: String, timestampBytes: ByteArray, secretKey: ByteArray, associatedData: ByteArray, valuesToEncryptList: List<String>, tripleGroupsToEncrypt: List<List<Statement>>, inputType: String = "JSON-LD", returnType: String = "Turtle"): String {
+        val model = ModelFactory.createDefaultModel()
 
-    val model = ModelFactory.createDefaultModel()
+        model.read(StringReader(jsonString), "http://example.org/", inputType)
 
-
-    fun encryptRDF(jsonString: String, timestampBytes: ByteArray, secretKey: ByteArray, associatedData: ByteArray, valuesToEncrypt: List<String>, tripleGroupsToEncrypt: List<List<Statement>>): String {
-        model.read(StringReader(jsonString), "http://example.org/", "JSON-LD")
-
-        var currentChar = 'A'
-        var currentReificationNumber = 1
+        val valuesToEncrypt: List<String> = if (inputType == "Turtle") {
+            val prefixMap = model.nsPrefixMap // Map<String, String>
+            valuesToEncryptList.map { value ->
+                var shortened = value
+                prefixMap.forEach { (prefix, baseUri) ->
+                    if (value.startsWith(baseUri)) {
+                        shortened = value.replace(baseUri, "$prefix:")
+                    }
+                }
+                shortened
+            }
+        } else {
+            valuesToEncryptList
+        }
 
         //////////////////////////////////
         // Handle triple set encryption //
         //////////////////////////////////
 
         for (group in tripleGroupsToEncrypt) {
-            val queryHelper = StringBuilder()
+            val stringBuilder = StringBuilder()
 
             group.joinToString("\n") { stmt ->
-                queryHelper.append("<${stmt.subject}> <${stmt.predicate}> \"${stmt.`object`}\" .\n")
+                stringBuilder.append("<${stmt.subject}> <${stmt.predicate}> \"${stmt.`object`}\" .\n")
             }
-            if (queryHelper.isNotEmpty()) {
-                queryHelper.setLength(queryHelper.length - 1)  // Remove the last character (newline)
+            if (stringBuilder.isNotEmpty()) {
+                stringBuilder.setLength(stringBuilder.length - 1)  // Remove the last character (newline)
             }
 
-            val valueToEncrypt = queryHelper.toString()
+            val valueToEncrypt = stringBuilder.toString()
             val encryptedValue = aesGcmEncrypt(timestampBytes + valueToEncrypt.toByteArray(), secretKey, associatedData)
 
             val ECString = EC(
@@ -75,13 +78,14 @@ object RDFEncryptionProcessor {
                 renc_datatype = "rdf:Resource"
             ).toString()
 
-            model.add(model.createResource("_:$currentChar"), model.createProperty("renc:encTriples"), model.createLiteral(ECString))
-            model.add(group.first().subject, model.createProperty("renc:triples"), model.createLiteral("_:$currentChar"))
-            model.add(group.first().subject, model.createProperty("http://www.w3.org/ns/renc#triples"), model.createLiteral("_:$currentChar"))
+            val blankNode = model.createResource()
+            val randomUUID = UUID.randomUUID().toString()
+
+            model.add(blankNode, model.createProperty("renc:encTriples"), model.createLiteral(ECString))
+            model.add(blankNode, model.createProperty("renc:assignedURI"), randomUUID)
+            model.add(group.first().subject, model.createProperty("http://www.w3.org/ns/renc#triples"), randomUUID)
 
             model.remove(group)
-
-            currentChar++
         }
 
         for (value in valuesToEncrypt) {
@@ -109,50 +113,63 @@ object RDFEncryptionProcessor {
             }
 
             for (result in resultsListPred) {
-                val objectValueString = result.getLiteral("o").string
-                val objectDatatypeURI = result.getLiteral("o").datatypeURI
+                val objectNode = result.get("o")
 
-                val objectValue = if (objectDatatypeURI == XSDDatatype.XSDstring.uri) {
-                    "\"$objectValueString\""
-                } else {
+                val (objectValueString, objectDatatypeURI) = when {
+                    objectNode.isLiteral -> {
+                        val literal = objectNode.asLiteral()
+                        val valueStr = literal.string
+                        val datatype = literal.datatypeURI
+                        Pair(valueStr, datatype)
+                    }
+                    objectNode.isResource -> {
+                        val resource = objectNode.asResource()
+                        val valueStr = resource.uri
+                        Pair(valueStr, null)
+                    }
+                    else -> throw IllegalStateException("Unexpected RDF Node type for object")
+                }
+
+                val objectValue = if (objectDatatypeURI != null) {
                     "\"$objectValueString\"^^<$objectDatatypeURI>"
+                } else {
+                    "<$objectValueString>"
                 }
 
                 val encryptedObject = aesGcmEncrypt(timestampBytes + objectValueString.toByteArray(), secretKey, associatedData)
-
                 val encryptedPredicate = aesGcmEncrypt(timestampBytes + value.toByteArray(), secretKey, associatedData)
 
+                val randomReificationNumber = UUID.randomUUID()
+                val blankNode = model.createResource()
+                val randomUUID = UUID.randomUUID().toString()
+
                 val updateQuery = """
-                        PREFIX ex: <http://example.org/>
-                        PREFIX renc: <http://www.w3.org/ns/renc#>
-                        DELETE { ?s <$value> $objectValue }
-                        INSERT { ?s renc:encPredicate ex:reificationQuad$currentReificationNumber }
+                    PREFIX ex: <http://example.org/>
+                    PREFIX renc: <http://www.w3.org/ns/renc#>
+                    DELETE { ?s <$value> $objectValue }
+                    INSERT { ?s renc:encPredicate ex:reificationQuad-$randomReificationNumber }
+                    WHERE {
+                        ?s <$value> $objectValue .
+                    }
+                """.trimIndent()
 
-                        WHERE {
-                            ?s <$value> $objectValue .
-                        }
-                    """.trimIndent()
-
-
-                model.add(model.createResource("_:$currentChar"), model.createProperty("renc:encNLabel"), model.createLiteral(EC(
+                model.add(blankNode, model.createProperty("renc:assignedURI"), randomUUID)
+                model.add(blankNode, model.createProperty("renc:encNLabel"), model.createLiteral(EC(
                     `@value` = Base64.getEncoder().encodeToString(encryptedObject),
-                    renc_datatype = result.getLiteral("o").datatype.uri,
+                    renc_datatype = objectDatatypeURI ?: "http://www.w3.org/2001/XMLSchema#anyURI",  // Default for resource
                 ).toString()))
 
                 val statement = model.createStatement(
-                    model.createResource("http://example.org/reificationQuad$currentReificationNumber"),
+                    model.createResource("http://example.org/reificationQuad-$randomReificationNumber"),
                     model.createProperty("renc:encPredicate"),
-                    model.createLiteral("_:$currentChar")
+                    randomUUID
                 )
 
-                val reifiedStatement = statement.createReifiedStatement("http://example.org/reificationQuad$currentReificationNumber")
+                val reifiedStatement = statement.createReifiedStatement("http://example.org/reificationQuad-$randomReificationNumber")
                 reifiedStatement.addProperty(model.createProperty("renc:encPLabel"), EC(
                     `@value` = Base64.getEncoder().encodeToString(encryptedPredicate),
                     renc_datatype = XSDDatatype.XSDstring.uri,
                 ).toString())
-
-                currentChar++
-                currentReificationNumber++
 
                 UpdateAction.parseExecute(updateQuery, model)
             }
@@ -162,12 +179,24 @@ object RDFEncryptionProcessor {
             // Handle object uri's alone //
             ///////////////////////////////
 
+            val shortenedValue = run {
+                val prefixMap = model.nsPrefixMap
+                var shortened = value
+                for ((prefix, baseUri) in prefixMap) {
+                    if (value.startsWith(baseUri)) {
+                        shortened = value.replaceFirst(baseUri, "$prefix:")
+                        break // Stop after the first match
+                    }
+                }
+                shortened
+            }
+
             val selectQueryObj = """
                     PREFIX ex: <http://example.org/>
                     PREFIX renc: <http://www.w3.org/ns/renc#>
                     SELECT ?s ?p
                     WHERE {
-                        ?s ?p "$value" .
+                        ?s ?p "$shortenedValue" .
                     }
                 """.trimIndent()
 
@@ -179,32 +208,33 @@ object RDFEncryptionProcessor {
                 resultsListObj.add(resultsObj.nextSolution())
             }
 
-            val encryptedObject = aesGcmEncrypt(timestampBytes + value.toByteArray(), secretKey, associatedData)
+            val encryptedObject = aesGcmEncrypt(timestampBytes + shortenedValue.toByteArray(), secretKey, associatedData)
 
             for (result in resultsListObj) {
                 val subjectValue = result.getResource("s")
                 val predicateValue = result.getResource("p")
 
+                val blankNode = model.createResource()
+                val randomUUID = UUID.randomUUID().toString()
+
                 val updateQuery = """
                         PREFIX ex: <http://example.org/>
                         PREFIX renc: <http://www.w3.org/ns/renc#>
-                        DELETE { <$subjectValue> <$predicateValue> "$value" }
-                        INSERT { <$subjectValue> <$predicateValue> "_:$currentChar" }
+                        DELETE { <$subjectValue> <$predicateValue> "$shortenedValue" }
+                        INSERT { <$subjectValue> <$predicateValue> "$randomUUID" }
                         WHERE {
-                            <$subjectValue> <$predicateValue> "$value" .
+                            <$subjectValue> <$predicateValue> "$shortenedValue" .
                         }
                     """.trimIndent()
 
-                model.add(model.createResource("_:$currentChar"), model.createProperty("renc:encNLabel"), model.createLiteral(EC(
+                model.add(blankNode, model.createProperty("renc:assignedURI"), randomUUID)
+                model.add(blankNode, model.createProperty("renc:encNLabel"), model.createLiteral(EC(
                     `@value` = Base64.getEncoder().encodeToString(encryptedObject),
                     renc_datatype = XSDDatatype.XSDstring.uri
                 ).toString()))
 
-
                 UpdateAction.parseExecute(updateQuery, model)
             }
-
-            if (resultsListObj.isNotEmpty()) currentChar++
 
             queryExecObj.close()
 
@@ -237,13 +267,15 @@ object RDFEncryptionProcessor {
                 // Remove triples with old subject value
                 model.remove(resultsListSubj)
 
-                model.add(
-                    model.createResource("_:$currentChar"), model.createProperty("renc:encNLabel"), model.createLiteral(
+                val blankNode = model.createResource()
+                val randomUUID = UUID.randomUUID().toString()
+
+                model.add(blankNode, model.createProperty("renc:assignedURI"), randomUUID)
+                model.add(blankNode, model.createProperty("renc:encNLabel"), model.createLiteral(
                         EC(
                             `@value` = Base64.getEncoder().encodeToString(encryptedSubject),
                             renc_datatype = "rdf:Resource"
-                        ).toString()
-                    )
+                        ).toString())
                 )
 
                 val selectQuerySubjAsObj = """
@@ -271,7 +303,7 @@ object RDFEncryptionProcessor {
                             PREFIX ex: <http://example.org/>
                             PREFIX renc: <http://www.w3.org/ns/renc#>
                             DELETE { <$subjectValue> <$predicateValue> <$value> }
-                            INSERT { <$subjectValue> <$predicateValue> "_:$currentChar" }
+                            INSERT { <$subjectValue> <$predicateValue> "$randomUUID" }
                             WHERE {
                                 <$subjectValue> <$predicateValue> <$value> .
                             }
@@ -280,36 +312,23 @@ object RDFEncryptionProcessor {
                     UpdateAction.parseExecute(updateQuery, model)
                 }
 
-                if (resultsListSubjAsObj.isNotEmpty()) currentChar++
-
                 queryExecSubjAsObj.close()
             }
         }
 
         val writer = StringWriter()
-        model.write(writer, "JSON-LD")
+        model.write(writer, returnType)
         return writer.toString()
     }
 
 
 
+    fun decryptRDF(jsonString: String, secretKey: ByteArray, associatedData: ByteArray, inputType: String = "Turtle", returnType: String = "JSON-LD"): Pair<String, Long> {
+        val model = ModelFactory.createDefaultModel()
 
-
-
-
-
-    fun decryptRDF(jsonString: String, secretKey: ByteArray, associatedData: ByteArray): Pair<String, Long> {
         var timestampBytes: Long? = null
 
-        model.read(StringReader(jsonString), null, "JSON-LD")
-
-        val listStatements = model.listStatements().toList()
-
-        listStatements.forEach { stmt ->
-            if (stmt.subject.isAnon) { // Check if the subject is a blank node
-                model.remove(stmt) // Remove all triples related to this blank node
-            }
-        }
+        model.read(StringReader(jsonString), null, inputType)
 
         ///////////////////////////
         // Handle renc:Predicate //
@@ -337,7 +356,8 @@ object RDFEncryptionProcessor {
             val objectValue = result.get("o") as Resource
 
             val newObject = model.listStatements(objectValue, model.createProperty("http://www.w3.org/1999/02/22-rdf-syntax-ns#object"), null as RDFNode?).toList().first().`object`
-            val encPLabel = model.listStatements(objectValue, model.createProperty("http://www.w3.org/ns/renc#encPLabel"), null as RDFNode?).toList().first().`object`
+            val PLabelVal = if(inputType == "Turtle") "renc:encPLabel" else "http://www.w3.org/ns/renc#encPLabel"
+            val encPLabel = model.listStatements(objectValue, model.createProperty(PLabelVal), null as RDFNode?).toList().first().`object`
 
             val toDecrypt = EC.fromCustomString(encPLabel.toString())
             val base64Decoded = Base64.getDecoder().decode(toDecrypt.`@value`)
@@ -372,12 +392,13 @@ object RDFEncryptionProcessor {
         // Handle renc:encNLabel //
         ///////////////////////////
 
+        val NLabelVal = if(inputType == "Turtle") "<renc:encNLabel>" else "renc:encNLabel"
         val selectQueryObj = """
                     PREFIX ex: <http://example.org/>
                     PREFIX renc: <http://www.w3.org/ns/renc#>
                     SELECT ?s ?o
                     WHERE {
-                        ?s <renc:encNLabel> ?o .
+                        ?s $NLabelVal ?o .
                     }
                 """.trimIndent()
 
@@ -406,7 +427,7 @@ object RDFEncryptionProcessor {
 
             val renc_datatype = toDecrypt.renc_datatype
 
-            var newObject: Any? = null
+            var newObject: Any?
             if (renc_datatype == "rdf:Resource") {
                 val parserModel = ModelFactory.createDefaultModel()
                 parserModel.setNsPrefixes(model.nsPrefixMap)
@@ -422,33 +443,34 @@ object RDFEncryptionProcessor {
                 newObject = "\"$decryptedString\"^^<$renc_datatype>"
             }
 
+            val assignedURIVal = if(inputType == "Turtle") "renc:assignedURI" else "http://www.w3.org/ns/renc#assignedURI"
+            val blankNodeUUID = model.listStatements(subjectValue, model.createProperty(assignedURIVal), null as RDFNode?).toList().first().`object`
+
             model.removeAll(subjectValue, null, null)
             val updateQuery = """
                         PREFIX ex: <http://example.org/>
                         PREFIX renc: <http://www.w3.org/ns/renc#>
-                        DELETE { ?s ?p "$subjectValue" }
+                        DELETE { ?s ?p "$blankNodeUUID" }
                         INSERT { ?s ?p $newObject }
                         WHERE {
-                            ?s ?p "$subjectValue" .
+                            ?s ?p "$blankNodeUUID" .
                         }
                     """.trimIndent()
 
             UpdateAction.parseExecute(updateQuery, model)
-
-            val a = 1
         }
 
         ////////////////////////////
         // Handle renc:encTriples //
         ////////////////////////////
 
-
+        val encTriplesVal = if(inputType == "Turtle") "<renc:encTriples>" else "renc:encTriples"
         val selectQueryEncTriples = """
                     PREFIX ex: <http://example.org/>
                     PREFIX renc: <http://www.w3.org/ns/renc#>
                     SELECT ?s ?o
                     WHERE {
-                        ?s <renc:encTriples> ?o .
+                        ?s $encTriplesVal ?o .
                     }
                 """.trimIndent()
 
@@ -471,32 +493,27 @@ object RDFEncryptionProcessor {
 
             val decryptedString = String(decryptedValue!!.copyOfRange(8, decryptedValue.size))
 
-            if (timestampBytes == null) timestampBytes = decryptedValue.copyOfRange(0, 8).toString().toLong()
+            if (timestampBytes == null) timestampBytes = decryptedValue.copyOfRange(0, 8).fold(0L) { acc, byte ->
+                (acc shl 8) or (byte.toLong() and 0xFF)
+            }
 
 
             val parserModel = ModelFactory.createDefaultModel()
             parserModel.read(StringReader(decryptedString), "http://example.org/", "Turtle")
             model.add(parserModel)
 
-            val triplesToAdd = parserModel.listStatements().toList()
-
-            for (stmt in triplesToAdd) {
-                model.add(stmt)
-            }
-
-            model.remove(subjectValue, model.createProperty("renc:encTriples"), objectValue)
-
+            val assignedURIVal = if(inputType == "Turtle") "renc:assignedURI" else "http://www.w3.org/ns/renc#assignedURI"
+            val blankNodeUUID = model.listStatements(subjectValue, model.createProperty(assignedURIVal), null as RDFNode?).toList().first().`object`
+            model.removeAll(subjectValue, null as Property?, null as RDFNode?)
 
             val deleteQueryTriples = """
                     PREFIX ex: <http://example.org/>
                     PREFIX renc: <http://www.w3.org/ns/renc#>
                     DELETE {
-                        ?s renc:triples "$subjectValue" .
-                        ?s <renc:triples> "$subjectValue" .
+                        ?s renc:triples "$blankNodeUUID" .
                     }
                     WHERE {
-                        ?s renc:triples "$subjectValue" .
-                        ?s <renc:triples> "$subjectValue" .
+                        ?s renc:triples "$blankNodeUUID" .
                     }
                 """.trimIndent()
 
@@ -504,7 +521,7 @@ object RDFEncryptionProcessor {
         }
 
         val writer = StringWriter()
-        model.write(writer, "JSON-LD")
+        model.write(writer, returnType)
         return Pair(writer.toString(), timestampBytes!!)
     }
 

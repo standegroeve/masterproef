@@ -7,7 +7,7 @@ import io.vertx.ext.web.Router
 import io.vertx.ext.web.RoutingContext
 import org.apache.jena.rdf.model.ModelFactory
 import org.apache.jena.rdf.model.Statement
-import security.crypto.generatePrekeys
+import security.crypto.KeyUtils.generatePrekeys
 import java.io.StringReader
 import java.nio.ByteBuffer
 
@@ -398,7 +398,7 @@ class MainVerticle : AbstractVerticle() {
     private fun uploadPreKeys(ctx: RoutingContext) {
         val targetPodId = ctx.request().getParam("pod")
         val authCode = ctx.request().getParam("authCode")
-        val user = if (targetPodId == "alice") Alice else Bob
+        val user = Bob
 
         if (authCode != null) {
             X3DH.uploadPreKeys(targetPodId, user.preKeys!!.getPublic(), authCode)
@@ -416,7 +416,7 @@ class MainVerticle : AbstractVerticle() {
     private fun sendInitialMessage(ctx: RoutingContext) {
         val targetPodId = ctx.request().getParam("pod")
         val authCode = ctx.request().getParam("authCode")
-        val user = if (targetPodId == "alice") Bob else Alice
+        val user = Alice
 
         if (authCode != null) {
             user.sharedKey = X3DH.sendInitialMessage(user, targetPodId, user.preKeys!!, authCode)
@@ -434,7 +434,7 @@ class MainVerticle : AbstractVerticle() {
     private fun processInitialMessage(ctx: RoutingContext) {
         val targetPodId = ctx.request().getParam("pod")
         val authCode = ctx.request().getParam("authCode")
-        val user = if (targetPodId == "alice") Alice else Bob
+        val user = Bob
 
         if (targetPodId != null && authCode != null) {
             user.sharedKey = X3DH.processInitialMessage(user, targetPodId, user.preKeys!!, authCode)

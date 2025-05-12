@@ -4,10 +4,10 @@ import org.apache.jena.rdf.model.Statement
 import org.apache.kafka.shaded.com.google.protobuf.Timestamp
 import org.bouncycastle.crypto.params.X25519PrivateKeyParameters
 import org.bouncycastle.crypto.params.X25519PublicKeyParameters
-import security.crypto.DiffieHellman
-import security.crypto.aesGcmDecrypt
-import security.crypto.aesGcmEncrypt
-import security.crypto.generateX25519KeyPair
+import security.crypto.CryptoUtils.DiffieHellman
+import security.crypto.CryptoUtils.aesGcmDecrypt
+import security.crypto.CryptoUtils.aesGcmEncrypt
+import security.crypto.KeyUtils.generateX25519KeyPair
 import security.messages.DecryptedMessage
 import security.messages.EncryptedMessage
 import security.messages.X3DHPreKeys
@@ -25,6 +25,9 @@ class User(val podId: String) {
 
     var prevPublicKey: ByteArray? = null
     var DHKeyPair: Pair<X25519PublicKeyParameters, X25519PrivateKeyParameters>? = null
+
+    var hashedPodId: String? = null
+    var targetHashedPodId: String? = null
 
     // Out-of-order message handling
     var skippedKeys = mutableMapOf<Int, ByteArray>()
@@ -66,14 +69,14 @@ class User(val podId: String) {
         val encrpytedMessage = EncryptedMessage(messageId + 1, DHKeyPair!!.first.encoded, ciphertext as ByteArray, sequenceNumber, PN)
 
         // sends the message to the pod
-        messageController.sendMessage(podId, targetPod, encrpytedMessage, authenticationCode)
+        messageController.sendMessage(targetHashedPodId!!, targetPod, encrpytedMessage, authenticationCode)
 
         return String(ciphertext, Charsets.UTF_8)
     }
 
     fun receiveMessage(targetPod: String, authenticationCode: String, keepStructure: Boolean): List<DecryptedMessage> {
         // Retreive messages which we havent seen already or whose key isnt in skippedKeys
-        val encryptedMessages = messageController.retrieveMessages(podId, targetPod, latestReceivedMessageId, skippedKeys, authenticationCode)
+        val encryptedMessages = messageController.retrieveMessages(hashedPodId!!, targetPod, latestReceivedMessageId, skippedKeys, authenticationCode)
 
         var messagesList = mutableListOf<DecryptedMessage>()
         for (i in 0..encryptedMessages.size-1) {
