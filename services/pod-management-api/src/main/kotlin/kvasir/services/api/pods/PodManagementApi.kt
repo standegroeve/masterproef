@@ -163,7 +163,7 @@ class PodManagementApi(
                 Uni.createFrom().item(Response.status(Response.Status.NOT_FOUND).build())
             }
             else {
-                val clearedStorage = mutableMapOf<String, Any>()
+                val clearedStorage = mutableMapOf<String, List<Any>>()
                 val updatedPod = existingPod.copy(messageStorage = clearedStorage)
                 podStore.persist(updatedPod)
                     .map { Response.noContent().build() }

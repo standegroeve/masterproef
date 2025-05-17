@@ -39,7 +39,7 @@ fun generateJsonLd(tripleCount: Int): String {
         val relatedSubject = model.createResource("ex:$relatedNumber")
 
         model.add(subject, model.createProperty("ex:relatedTo"), relatedSubject)
-        model.add(relatedSubject, model.createProperty("ex:name"), "Name$relatedNumber")
+        model.add(relatedSubject, model.createProperty("ex:nameObject"), "Name$relatedNumber")
 
     }
 
@@ -64,7 +64,7 @@ fun generateJsonLdSum(tripleCount: Int): String {
         val relatedSubject = model.createResource("ex:$relatedNumber")
 
         model.add(subject, model.createProperty("ex:relatedTo"), relatedSubject)
-        model.add(relatedSubject, model.createProperty("ex:name"), "Name$relatedNumber")
+        model.add(relatedSubject, model.createProperty("ex:address"), "Name$relatedNumber")
 
     }
 
@@ -144,6 +144,23 @@ fun getValuesToEncrypt(percentage: Int): List<String> {
             }
             """.trimIndent()
         }
+        100 -> {
+            """
+            {
+                "@context": {
+                    "ex": "http://example.org/",
+                    "renc": "http://www.w3.org/ns/renc#"
+                },
+                "@id": "ex:encryptionValues",
+                "ex:valuesToEncrypt": [
+                    { "@id": "ex:name" },
+                    { "@id": "ex:description" },
+                    { "@id": "ex:address" },
+                    { "@id": "ex:nameObject" }
+                ]
+            }
+            """.trimIndent()
+        }
         else -> {
             throw IllegalArgumentException("Unsupported encryption percentage")
         }
@@ -176,7 +193,7 @@ fun getTriplesToEncrypt(tripleCount: Int): List<List<Statement>> {
         graphString.append("""
             {
                 "@id": "ex:$number",
-                "ex:namenameObj": "Name$number"
+                "ex:nameObject": "Name$number"
             }
         """.trimIndent())
     }

@@ -21,6 +21,7 @@ fun encryptionOverheadMeasurer(tripleCount: Int): List<StorageBenchmarkResult> {
     val valuesToEncrypt25 = getValuesToEncrypt(25)
     val valuesToEncrypt50 = getValuesToEncrypt(50)
     val valuesToEncrypt75 = getValuesToEncrypt(75)
+    val valuesToEncrypt100 = getValuesToEncrypt(100)
 
     for (i in 1..tripleCount) {
         val json = generateJsonLd(i * 5)
@@ -28,25 +29,24 @@ fun encryptionOverheadMeasurer(tripleCount: Int): List<StorageBenchmarkResult> {
         val jsonOriginalSize = json.toByteArray(Charsets.UTF_8).size
 
         val tripleGroupsToEncrypt0 = emptyList<List<Statement>>()
-        val tripleGroupsToEncrypt100 = getTriplesToEncrypt(i)
 
         val atomicEncryptJSON = CryptoUtils.aesGcmEncrypt(jsonByteArray, randomKey.encoded, associatedData)
         val overheadPercentageAtomicJSON = ((atomicEncryptJSON!!.size - jsonOriginalSize).toDouble() / jsonOriginalSize) * 100
         results.add(StorageBenchmarkResult("Atomic Encryption JSON-LD", jsonOriginalSize, atomicEncryptJSON.size, overheadPercentageAtomicJSON))
 
-        val partialEncrypt25JSON = RDFEncryptionProcessor.encryptRDF(json, timestampBytes, randomKey.encoded, associatedData, valuesToEncrypt25, tripleGroupsToEncrypt0).toByteArray()
+        val partialEncrypt25JSON = RDFEncryptionProcessor.encryptRDF(json, timestampBytes, randomKey.encoded, associatedData, valuesToEncrypt25, tripleGroupsToEncrypt0, returnType = "JSON-LD").toByteArray()
         val overheadPercentagePartial25JSON = ((partialEncrypt25JSON!!.size - jsonOriginalSize).toDouble() / jsonOriginalSize) * 100
         results.add(StorageBenchmarkResult("Partial Encryption 25% JSON-LD", jsonOriginalSize, partialEncrypt25JSON.size, overheadPercentagePartial25JSON))
 
-        val partialEncrypt50JSON = RDFEncryptionProcessor.encryptRDF(json, timestampBytes, randomKey.encoded, associatedData, valuesToEncrypt50, tripleGroupsToEncrypt0).toByteArray()
+        val partialEncrypt50JSON = RDFEncryptionProcessor.encryptRDF(json, timestampBytes, randomKey.encoded, associatedData, valuesToEncrypt50, tripleGroupsToEncrypt0, returnType = "JSON-LD").toByteArray()
         val overheadPercentagePartial50JSON = ((partialEncrypt50JSON!!.size - jsonOriginalSize).toDouble() / jsonOriginalSize) * 100
         results.add(StorageBenchmarkResult("Partial Encryption 50% JSON-LD", jsonOriginalSize, partialEncrypt50JSON.size, overheadPercentagePartial50JSON))
 
-        val partialEncrypt75JSON = RDFEncryptionProcessor.encryptRDF(json, timestampBytes, randomKey.encoded, associatedData, valuesToEncrypt75, tripleGroupsToEncrypt0).toByteArray()
+        val partialEncrypt75JSON = RDFEncryptionProcessor.encryptRDF(json, timestampBytes, randomKey.encoded, associatedData, valuesToEncrypt75, tripleGroupsToEncrypt0, returnType = "JSON-LD").toByteArray()
         val overheadPercentagePartial75JSON = ((partialEncrypt75JSON!!.size - jsonOriginalSize).toDouble() / jsonOriginalSize) * 100
         results.add(StorageBenchmarkResult("Partial Encryption 75% JSON-LD", jsonOriginalSize, partialEncrypt75JSON.size, overheadPercentagePartial75JSON))
 
-        val partialEncrypt100JSON = RDFEncryptionProcessor.encryptRDF(json, timestampBytes, randomKey.encoded, associatedData, valuesToEncrypt75, tripleGroupsToEncrypt100).toByteArray()
+        val partialEncrypt100JSON = RDFEncryptionProcessor.encryptRDF(json, timestampBytes, randomKey.encoded, associatedData, valuesToEncrypt100, tripleGroupsToEncrypt0, returnType = "JSON-LD").toByteArray()
         val overheadPercentagePartial100JSON = ((partialEncrypt100JSON!!.size - jsonOriginalSize).toDouble() / jsonOriginalSize) * 100
         results.add(StorageBenchmarkResult("Partial Encryption 100% JSON-LD", jsonOriginalSize, partialEncrypt100JSON.size, overheadPercentagePartial100JSON))
 
@@ -68,7 +68,7 @@ fun encryptionOverheadMeasurer(tripleCount: Int): List<StorageBenchmarkResult> {
         val overheadPercentagePartial75Turtle = ((partialEncrypt75Turtle!!.size - jsonOriginalSize).toDouble() / jsonOriginalSize) * 100
         results.add(StorageBenchmarkResult("Partial Encryption 75% Turtle", jsonOriginalSize, partialEncrypt75Turtle.size, overheadPercentagePartial75Turtle))
 
-        val partialEncrypt100Turtle = RDFEncryptionProcessor.encryptRDF(json, timestampBytes, randomKey.encoded, associatedData, valuesToEncrypt75, tripleGroupsToEncrypt100, returnType = "Turtle").toByteArray()
+        val partialEncrypt100Turtle = RDFEncryptionProcessor.encryptRDF(json, timestampBytes, randomKey.encoded, associatedData, valuesToEncrypt100, tripleGroupsToEncrypt0, returnType = "Turtle").toByteArray()
         val overheadPercentagePartial100Turtle = ((partialEncrypt100Turtle!!.size - jsonOriginalSize).toDouble() / jsonOriginalSize) * 100
         results.add(StorageBenchmarkResult("Partial Encryption 100% Turtle", jsonOriginalSize, partialEncrypt100Turtle.size, overheadPercentagePartial100Turtle))
 

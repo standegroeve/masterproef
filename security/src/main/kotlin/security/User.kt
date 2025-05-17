@@ -60,7 +60,7 @@ class User(val podId: String) {
         // encrypt message
         var ciphertext: Any?
         if (keepStructure) {
-            ciphertext = RDFEncryptionProcessor.encryptRDF(String(input, Charsets.UTF_8), timestampBytes, messageKey, associatedData, valuesToEncrypt, tripleGroupsToEncrypt).toByteArray()
+            ciphertext = RDFEncryptionProcessor.encryptRDF(String(input, Charsets.UTF_8), timestampBytes, messageKey, associatedData, valuesToEncrypt, tripleGroupsToEncrypt, returnType = "JSON-LD").toByteArray()
         }
         else {
             ciphertext = aesGcmEncrypt(timestampBytes + input, messageKey, associatedData)
@@ -97,7 +97,7 @@ class User(val podId: String) {
                 var timestampBytes: Long?
 
                 if (keepStructure) {
-                    val result = RDFEncryptionProcessor.decryptRDF(String(message.cipherText, Charsets.UTF_8), messageKey!!, associatedData)
+                    val result = RDFEncryptionProcessor.decryptRDF(String(message.cipherText, Charsets.UTF_8), messageKey!!, associatedData, inputType = "JSON-LD")
                     decryptedString = result.first
                     timestampBytes = result.second
                 }
@@ -152,7 +152,7 @@ class User(val podId: String) {
 
             if (keepStructure) {
                 val result = RDFEncryptionProcessor.decryptRDF(String(message.cipherText, Charsets.UTF_8),
-                    messageKey, associatedData)
+                    messageKey, associatedData, inputType = "JSON-LD")
                 decryptedString = result.first
                 timestampBytes = result.second
             }
@@ -183,13 +183,13 @@ class User(val podId: String) {
 
         val encrpytedMessage = EncryptedMessage(messageId, ByteArray(0), timestampBytes + input, 0, 0)
 
-        messageController.sendMessage(podId, targetPod, encrpytedMessage, authCode, mocked)
+        messageController.sendMessage(targetHashedPodId!!, targetPod, encrpytedMessage, authCode, mocked)
 
         return String(input, Charsets.UTF_8)
     }
 
     fun receiveMessageNoEnc(targetPod: String, authCode: String, mocked: Boolean): MutableList<DecryptedMessage> {
-        val encryptedMessages = messageController.retrieveMessages(podId, targetPod, latestReceivedMessageId, skippedKeys, authCode, mocked)
+        val encryptedMessages = messageController.retrieveMessages(hashedPodId!!, targetPod, latestReceivedMessageId, skippedKeys, authCode, mocked)
 
         var messagesList = mutableListOf<DecryptedMessage>()
         for (i in 0..encryptedMessages.size-1) {
