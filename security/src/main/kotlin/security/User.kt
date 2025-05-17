@@ -1,7 +1,6 @@
 package security
 
 import org.apache.jena.rdf.model.Statement
-import org.apache.kafka.shaded.com.google.protobuf.Timestamp
 import org.bouncycastle.crypto.params.X25519PrivateKeyParameters
 import org.bouncycastle.crypto.params.X25519PublicKeyParameters
 import security.crypto.CryptoUtils.DiffieHellman
@@ -39,14 +38,14 @@ class User(val podId: String) {
 
     var latestReceivedMessageId = -1
 
-    fun sendInitialMessage(targetPod: String, input: ByteArray, timestampBytes: ByteArray, authenticationCode: String, keepStructure: Boolean, valuesToEncrypt: List<String> = emptyList(), tripleGroupsToEncrypt: List<List<Statement>> = emptyList()): String {
+    fun sendInitialMessage(targetPod: String, input: ByteArray, timestampBytes: ByteArray, authenticationCode: String, keepStructure: Boolean, valuesToEncrypt: List<String> = emptyList(), tripleGroupsToEncrypt: List<List<Statement>> = emptyList(), mocked: Boolean): String {
         DHKeyPair = generateX25519KeyPair()
         val initialDHoutput = DiffieHellman(DHKeyPair!!.second, X25519PublicKeyParameters(initialDHPublicKey))
         sendingKey = KeyRatchet.SymmetricKeyRatchetRoot(this, initialDHoutput)
-        return sendMessage(targetPod, input, timestampBytes, authenticationCode, keepStructure, valuesToEncrypt, tripleGroupsToEncrypt)
+        return sendMessage(targetPod, input, timestampBytes, authenticationCode, keepStructure, valuesToEncrypt, tripleGroupsToEncrypt, mocked)
     }
 
-    fun sendMessage(targetPod: String, input: ByteArray, timestampBytes: ByteArray, authenticationCode: String, keepStructure: Boolean, valuesToEncrypt: List<String> = emptyList(), tripleGroupsToEncrypt: List<List<Statement>> = emptyList()): String {
+    fun sendMessage(targetPod: String, input: ByteArray, timestampBytes: ByteArray, authenticationCode: String, keepStructure: Boolean, valuesToEncrypt: List<String> = emptyList(), tripleGroupsToEncrypt: List<List<Statement>> = emptyList(), mocked: Boolean): String {
         val messageId = sentMessageId
         sentMessageId++
 
@@ -59,9 +58,9 @@ class User(val podId: String) {
         val associatedData = DHKeyPair!!.first.encoded + preKeys!!.publicIdentityPreKey.encoded + targetPublicKey!!
 
         // encrypt message
-        var ciphertext: Any? = null
+        var ciphertext: Any?
         if (keepStructure) {
-            ciphertext = RDFEncryptionProcessor.encryptRDF(String(input, Charsets.UTF_8), timestampBytes, messageKey, associatedData, valuesToEncrypt, tripleGroupsToEncrypt).toByteArray()
+            ciphertext = RDFEncryptionProcessor.encryptRDF(String(input, Charsets.UTF_8), timestampBytes, messageKey, associatedData, valuesToEncrypt, tripleGroupsToEncrypt, returnType = "JSON-LD").toByteArray()
         }
         else {
             ciphertext = aesGcmEncrypt(timestampBytes + input, messageKey, associatedData)
@@ -69,14 +68,14 @@ class User(val podId: String) {
         val encrpytedMessage = EncryptedMessage(messageId + 1, DHKeyPair!!.first.encoded, ciphertext as ByteArray, sequenceNumber, PN)
 
         // sends the message to the pod
-        messageController.sendMessage(targetHashedPodId!!, targetPod, encrpytedMessage, authenticationCode)
+        messageController.sendMessage(targetHashedPodId!!, targetPod, encrpytedMessage, authenticationCode, mocked)
 
         return String(ciphertext, Charsets.UTF_8)
     }
 
-    fun receiveMessage(targetPod: String, authenticationCode: String, keepStructure: Boolean): List<DecryptedMessage> {
+    fun receiveMessage(targetPod: String, authenticationCode: String, keepStructure: Boolean, mocked: Boolean): List<DecryptedMessage> {
         // Retreive messages which we havent seen already or whose key isnt in skippedKeys
-        val encryptedMessages = messageController.retrieveMessages(hashedPodId!!, targetPod, latestReceivedMessageId, skippedKeys, authenticationCode)
+        val encryptedMessages = messageController.retrieveMessages(hashedPodId!!, targetPod, latestReceivedMessageId, skippedKeys, authenticationCode, mocked)
 
         var messagesList = mutableListOf<DecryptedMessage>()
         for (i in 0..encryptedMessages.size-1) {
@@ -98,7 +97,7 @@ class User(val podId: String) {
                 var timestampBytes: Long?
 
                 if (keepStructure) {
-                    val result = RDFEncryptionProcessor.decryptRDF(String(message.cipherText, Charsets.UTF_8), messageKey!!, associatedData)
+                    val result = RDFEncryptionProcessor.decryptRDF(String(message.cipherText, Charsets.UTF_8), messageKey!!, associatedData, inputType = "JSON-LD")
                     decryptedString = result.first
                     timestampBytes = result.second
                 }
@@ -107,7 +106,7 @@ class User(val podId: String) {
                     decryptedString = String(decryptedData!!.copyOfRange(8, decryptedData.size))
                     timestampBytes = ByteBuffer.wrap(decryptedData.copyOfRange(0, 8)).long
                 }
-                messagesList.add(DecryptedMessage(message.messageId, message.publicKey, decryptedString!!, timestampBytes!!))
+                messagesList.add(DecryptedMessage(message.messageId, message.publicKey, decryptedString, timestampBytes))
                 continue
             }
 
@@ -148,20 +147,21 @@ class User(val podId: String) {
             val associatedData = message.publicKey + targetPublicKey!! + preKeys!!.publicIdentityPreKey.encoded
 
             // decrypt message
-            var decryptedString: String? = null
-            var timestampBytes: Long? = null
+            var decryptedString: String?
+            var timestampBytes: Long?
 
             if (keepStructure) {
-                val result = RDFEncryptionProcessor.decryptRDF(String(message.cipherText, Charsets.UTF_8), messageKey!!, associatedData)
+                val result = RDFEncryptionProcessor.decryptRDF(String(message.cipherText, Charsets.UTF_8),
+                    messageKey, associatedData, inputType = "JSON-LD")
                 decryptedString = result.first
                 timestampBytes = result.second
             }
             else {
-                val decryptedData = aesGcmDecrypt(message.cipherText, messageKey!!, associatedData)
+                val decryptedData = aesGcmDecrypt(message.cipherText, messageKey, associatedData)
                 decryptedString = String(decryptedData!!.copyOfRange(8, decryptedData.size))
                 timestampBytes = ByteBuffer.wrap(decryptedData.copyOfRange(0, 8)).long
             }
-            messagesList.add(DecryptedMessage(message.messageId, message.publicKey, decryptedString!!, timestampBytes!!))
+            messagesList.add(DecryptedMessage(message.messageId, message.publicKey, decryptedString, timestampBytes))
         }
 
         return messagesList
@@ -174,6 +174,36 @@ class User(val podId: String) {
             receivedMessageId++
         }
     }
+
+
+
+    fun sendMessageNoEnc(targetPod: String, input: ByteArray, timestampBytes: ByteArray, authCode: String, mocked: Boolean): String {
+        val messageId = sentMessageId
+        sentMessageId++
+
+        val encrpytedMessage = EncryptedMessage(messageId, ByteArray(0), timestampBytes + input, 0, 0)
+
+        messageController.sendMessage(targetHashedPodId!!, targetPod, encrpytedMessage, authCode, mocked)
+
+        return String(input, Charsets.UTF_8)
+    }
+
+    fun receiveMessageNoEnc(targetPod: String, authCode: String, mocked: Boolean): MutableList<DecryptedMessage> {
+        val encryptedMessages = messageController.retrieveMessages(hashedPodId!!, targetPod, latestReceivedMessageId, skippedKeys, authCode, mocked)
+
+        var messagesList = mutableListOf<DecryptedMessage>()
+        for (i in 0..encryptedMessages.size-1) {
+            val message = encryptedMessages[i]
+            val messageCipher = message.cipherText
+
+            val plaintext = String(messageCipher.copyOfRange(8, messageCipher.size))
+            val timestampBytes = ByteBuffer.wrap(messageCipher.copyOfRange(0, 8)).long
+
+            messagesList.add(DecryptedMessage(message.messageId, message.publicKey, plaintext, timestampBytes))
+        }
+        return messagesList
+    }
+
 }
 
 

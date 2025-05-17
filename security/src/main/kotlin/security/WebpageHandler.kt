@@ -15,6 +15,7 @@ class MainVerticle : AbstractVerticle() {
     val Alice = User("alice")
     val Bob = User("bob")
     var isNotInitialized = true
+    val mocked = false
 
     override fun start() {
         // Initialize Alice and Bob
@@ -473,17 +474,17 @@ class MainVerticle : AbstractVerticle() {
             var encryptedMessage: String?
             if (isNotInitialized) {
                 if (sender == "alice") {
-                    encryptedMessage = Alice.sendInitialMessage(targetPodId, message.toByteArray(), timestampBytes, authCode, keepStructure, valuesToEncrypt, tripleGroupsToEncrypt)
+                    encryptedMessage = Alice.sendInitialMessage(targetPodId, message.toByteArray(), timestampBytes, authCode, keepStructure, valuesToEncrypt, tripleGroupsToEncrypt, mocked)
                     isNotInitialized = false
                 } else {
-                    encryptedMessage = Bob.sendInitialMessage(targetPodId, message.toByteArray(), timestampBytes, authCode, keepStructure, valuesToEncrypt, tripleGroupsToEncrypt)
+                    encryptedMessage = Bob.sendInitialMessage(targetPodId, message.toByteArray(), timestampBytes, authCode, keepStructure, valuesToEncrypt, tripleGroupsToEncrypt, mocked)
                     isNotInitialized = false
                 }
             } else {
                 if (sender == "alice") {
-                    encryptedMessage = Alice.sendMessage(targetPodId, message.toByteArray(), timestampBytes, authCode, keepStructure, valuesToEncrypt, tripleGroupsToEncrypt)
+                    encryptedMessage = Alice.sendMessage(targetPodId, message.toByteArray(), timestampBytes, authCode, keepStructure, valuesToEncrypt, tripleGroupsToEncrypt, mocked)
                 } else {
-                    encryptedMessage = Bob.sendMessage(targetPodId, message.toByteArray(), timestampBytes, authCode, keepStructure, valuesToEncrypt, tripleGroupsToEncrypt)
+                    encryptedMessage = Bob.sendMessage(targetPodId, message.toByteArray(), timestampBytes, authCode, keepStructure, valuesToEncrypt, tripleGroupsToEncrypt, mocked)
                 }
             }
             val jsonResponse = JsonObject()
@@ -540,7 +541,7 @@ class MainVerticle : AbstractVerticle() {
         val keepStructure = keepStructureParam != null && keepStructureParam == "true"
 
         if (targetPodId != null && user != null) {
-            val messages = if (user == "alice") Alice.receiveMessage(targetPodId, authCode, keepStructure) else Bob.receiveMessage(targetPodId, authCode, keepStructure)
+            val messages = if (user == "alice") Alice.receiveMessage(targetPodId, authCode, keepStructure, mocked) else Bob.receiveMessage(targetPodId, authCode, keepStructure, mocked)
 
             val jsonResponse = JsonObject().put("messages", messages)
 

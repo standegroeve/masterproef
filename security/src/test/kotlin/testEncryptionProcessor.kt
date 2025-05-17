@@ -70,7 +70,7 @@ class testEncryptionProcessor() {
 
         val jsonString = """
             {
-              "@context": { 
+              "@context": {
                 "ex": "http://example.org/",
                 "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
                 "renc": "http://www.w3.org/ns/renc#"
@@ -128,7 +128,7 @@ class testEncryptionProcessor() {
     fun testDecryptRDF() {
         val jsonString = """
             {
-              "@context": { 
+              "@context": {
                 "ex": "http://example.org/",
                 "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
                 "renc": "http://www.w3.org/ns/renc#"

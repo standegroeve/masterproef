@@ -1,28 +1,22 @@
 package security
 
-import com.fasterxml.jackson.core.type.TypeReference
-import com.fasterxml.jackson.databind.util.JSONPObject
 import com.fasterxml.jackson.module.kotlin.convertValue
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import org.bouncycastle.crypto.params.X25519PrivateKeyParameters
-import java.util.*
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import com.fasterxml.jackson.module.kotlin.readValue
-import org.apache.kafka.common.protocol.types.Field.Bool
 import org.bouncycastle.crypto.params.X25519PublicKeyParameters
 import security.crypto.*
-import security.crypto.CryptoUtils.DiffieHellman
 import security.crypto.CryptoUtils.HKDF
+import security.crypto.CryptoUtils.DiffieHellman
 import security.crypto.CryptoUtils.aesGcmDecrypt
 import security.crypto.CryptoUtils.aesGcmEncrypt
 import security.crypto.KeyUtils.generateX25519KeyPair
-import security.crypto.XEdDSA.xeddsa_verify
 import security.messages.*
 import java.security.MessageDigest
-import java.util.concurrent.TimeUnit
+import java.util.*
 
 
 object X3DH {
@@ -161,7 +155,7 @@ object X3DH {
                 ?: return null
             )
 
-            return X3dhKeysAsString.convertToX25519()
+            return X3dhKeysAsString.convertFromString()
         }
     }
 
@@ -183,10 +177,10 @@ object X3DH {
 
         actor.initialDHPublicKey = targetPrekeys.publicSignedPreKey.encoded
         actor.targetPublicKey = targetPrekeys.publicIdentityPreKeyX25519.encoded
-        actor.DHKeyPair = generateX25519KeyPair()
+        actor.DHKeyPair = KeyUtils.generateX25519KeyPair()
 
         // Verify the signature
-        val verified = xeddsa_verify(
+        val verified = XEdDSA.xeddsa_verify(
             targetPrekeys.publicIdentityPreKeyEd25519,
             targetPrekeys.publicSignedPreKey.encoded,
             targetPrekeys.preKeySignature
@@ -223,8 +217,7 @@ object X3DH {
         /*
             Generate ciphertext
          */
-        val associatedData: ByteArray =
-            preKeys.publicIdentityPreKey.encoded + targetPrekeys.publicIdentityPreKeyX25519.encoded
+        val associatedData: ByteArray = preKeys.publicIdentityPreKey.encoded + targetPrekeys.publicIdentityPreKeyX25519.encoded
         val plaintext: ByteArray = "Handshake send initial message".toByteArray()
         val ciphertext = aesGcmEncrypt(plaintext, sharedKey, associatedData)
 
@@ -349,6 +342,7 @@ object X3DH {
 
             client.newCall(requestDelete).execute().use { response ->
                 if (response.code != 201) {
+                    println("Unexpected response code: ${response.code}, Message: ${response.message}")
                     throw RuntimeException("Unexpected response code: ${response.code}, Message: ${response.message}")
                 }
             }

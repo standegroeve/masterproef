@@ -2,14 +2,16 @@ package security.partialEncrypt
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import org.apache.jena.datatypes.xsd.XSDDatatype
-import org.apache.jena.query.*
+import org.apache.jena.query.QueryExecution
+import org.apache.jena.query.QueryExecutionFactory
+import org.apache.jena.query.QuerySolution
+import org.apache.jena.query.ResultSet
 import org.apache.jena.rdf.model.*
 import org.apache.jena.update.UpdateAction
 import security.crypto.CryptoUtils.aesGcmDecrypt
 import security.crypto.CryptoUtils.aesGcmEncrypt
 import java.io.StringReader
 import java.io.StringWriter
-import java.security.MessageDigest
 import java.util.*
 
 data class EC(
@@ -311,7 +313,6 @@ object RDFEncryptionProcessor {
 
                     UpdateAction.parseExecute(updateQuery, model)
                 }
-
                 queryExecSubjAsObj.close()
             }
         }
@@ -356,6 +357,7 @@ object RDFEncryptionProcessor {
             val objectValue = result.get("o") as Resource
 
             val newObject = model.listStatements(objectValue, model.createProperty("http://www.w3.org/1999/02/22-rdf-syntax-ns#object"), null as RDFNode?).toList().first().`object`
+
             val PLabelVal = if(inputType == "Turtle") "renc:encPLabel" else "http://www.w3.org/ns/renc#encPLabel"
             val encPLabel = model.listStatements(objectValue, model.createProperty(PLabelVal), null as RDFNode?).toList().first().`object`
 
@@ -393,6 +395,7 @@ object RDFEncryptionProcessor {
         ///////////////////////////
 
         val NLabelVal = if(inputType == "Turtle") "<renc:encNLabel>" else "renc:encNLabel"
+
         val selectQueryObj = """
                     PREFIX ex: <http://example.org/>
                     PREFIX renc: <http://www.w3.org/ns/renc#>
@@ -496,7 +499,6 @@ object RDFEncryptionProcessor {
             if (timestampBytes == null) timestampBytes = decryptedValue.copyOfRange(0, 8).fold(0L) { acc, byte ->
                 (acc shl 8) or (byte.toLong() and 0xFF)
             }
-
 
             val parserModel = ModelFactory.createDefaultModel()
             parserModel.read(StringReader(decryptedString), "http://example.org/", "Turtle")
