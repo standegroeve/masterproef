@@ -35,3 +35,6 @@ load-tests/results
 *.drawio.bkp
 .kotlin
 **/target
+
+encryption_benchmark/venv
+encryption_benchmark/outputs
