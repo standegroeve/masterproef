@@ -324,11 +324,6 @@ object RDFEncryptionProcessor {
 
 
 
-
-
-
-
-
     fun decryptRDF(jsonString: String, secretKey: ByteArray, associatedData: ByteArray, inputType: String = "Turtle", returnType: String = "JSON-LD"): Pair<String, Long> {
         val model = ModelFactory.createDefaultModel()
 

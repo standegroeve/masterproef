@@ -6,10 +6,8 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import security.messages.DecryptedMessage
 import security.messages.EncryptedMessage
 import security.messages.EncryptedMessageString
-import security.messages.X3DHPublicKeysAsString
 import java.util.*
 
 object messageController {
@@ -104,6 +102,7 @@ object messageController {
                 }
                 // Sort the list by messageId
                 return filteredMessages.sortedBy { it.messageId }
+
             }
         }
     }

@@ -16,6 +16,7 @@ object KeyUtils {
         // Key generation parameters
         val keyGenParams = KeyGenerationParameters(secureRandom, 256)
         val keyPairGenerator = X25519KeyPairGenerator()
+        
         keyPairGenerator.init(keyGenParams)
         val keyPair = keyPairGenerator.generateKeyPair()
         val privateKey = keyPair.private as X25519PrivateKeyParameters
