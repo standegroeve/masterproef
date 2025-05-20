@@ -38,8 +38,8 @@ fun benchmarkX3DH(tripleCount: Int, accounts: Int): MutableList<Long> {
         bob.preKeys = generatePrekeys()
 
         val x3dhTime = measureNanoTime {
-            X3DH.initiateSliceSchema(bob.podId, authCode)
-            X3DH.uploadPreKeys(bob.podId, bob.preKeys!!.getPublic(), authCode)
+            X3DH.initiateSliceSchema(bob.username, authCode)
+            X3DH.uploadPreKeys(bob.username, bob.preKeys!!.getPublic(), authCode)
 
             val maxRetries = 5
             var attempt = 0
@@ -47,7 +47,7 @@ fun benchmarkX3DH(tripleCount: Int, accounts: Int): MutableList<Long> {
 
             while (attempt < maxRetries) {
                 try {
-                    alice.sharedKey = X3DH.sendInitialMessage(alice, bob.podId, alice.preKeys!!, authCode)
+                    alice.sharedKey = X3DH.sendInitialMessage(alice, bob.username, alice.preKeys!!, authCode)
                     break
                 }
                 catch (e: RuntimeException) {
@@ -67,7 +67,7 @@ fun benchmarkX3DH(tripleCount: Int, accounts: Int): MutableList<Long> {
 
             while (attempt < maxRetries) {
                 try {
-                    bob.sharedKey = X3DH.processInitialMessage(bob, bob.podId, bob.preKeys!!, authCode)
+                    bob.sharedKey = X3DH.processInitialMessage(bob, bob.username, bob.preKeys!!, authCode)
                     break
                 }
                 catch (e: RuntimeException) {

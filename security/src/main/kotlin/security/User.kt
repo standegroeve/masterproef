@@ -13,7 +13,7 @@ import security.messages.X3DHPreKeys
 import security.partialEncrypt.RDFEncryptionProcessor
 import java.nio.ByteBuffer
 
-class User(val podId: String) {
+class User(val username: String) {
     var initialDHPublicKey: ByteArray? = null
     var targetPublicKey: ByteArray? = null
     var preKeys: X3DHPreKeys? = null
